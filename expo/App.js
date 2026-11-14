@@ -111,7 +111,7 @@ const styles = StyleSheet.create({
   mapAttributionText:{color:"#526273",fontSize:8},
   mapControlsFull:{position:"absolute",right:12,bottom:18,gap:8},
   topBar:{height:58,paddingHorizontal:19,flexDirection:"row",alignItems:"center",justifyContent:"space-between",borderBottomWidth:1,borderBottomColor:"#182438"},
-  brand:{fontSize:20,fontWeight:"900",letterSpacing:1.2,color:"#F5F8FC"},brandAccent:{color:"#20D6A0"},
+  brand:{fontSize:17,fontWeight:"900",letterSpacing:0.8,color:"#F5F8FC"},brandAccent:{color:"#20D6A0"},
   topStatus:{flexDirection:"row",alignItems:"center",gap:7,paddingHorizontal:11,paddingVertical:7,borderRadius:20,backgroundColor:"#222D3D"},topStatusOn:{backgroundColor:"#10372E"},
   tinyDot:{width:7,height:7,borderRadius:5,backgroundColor:"#8B98A9"},topStatusText:{fontSize:11,color:"#E5EDF5",fontWeight:"700"},
   scroll:{flex:1},content:{paddingHorizontal:15,paddingTop:17,paddingBottom:22},
