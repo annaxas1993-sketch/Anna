@@ -39,8 +39,10 @@ export default function App() {
       if (permission.status !== "granted") return;
       const current = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
       if (active) {
-        setLocation({ latitude: current.coords.latitude, longitude: current.coords.longitude });
+        const next = { latitude: current.coords.latitude, longitude: current.coords.longitude };
+        setLocation(next);
         setGpsReady(true);
+        mapRef.current?.animateToRegion({ ...next, latitudeDelta: 0.018, longitudeDelta: 0.018 }, 500);
       }
     })().catch(() => {});
     return () => { active = false; };
@@ -92,14 +94,39 @@ export default function App() {
   const screens = {home:renderHome, orders:renderOrders, tasks:renderTasks, balance:renderBalance, profile:renderProfile};
   return <SafeAreaView style={styles.safe}>
     <StatusBar barStyle="light-content" backgroundColor="#080E19"/>
-    <View style={styles.topBar}><Text style={styles.brand}>AXAS <Text style={styles.brandAccent}>DRIVER</Text></Text><View style={[styles.topStatus, online && styles.topStatusOn]}><View style={[styles.tinyDot, online && styles.statusDotOn]}/><Text style={styles.topStatusText}>{online ? "Առցանց" : "Անցանց"}</Text></View></View>
-    <ScrollView style={styles.scroll} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>{screens[tab]()}</ScrollView>
+    {tab === "home" ? <View style={styles.fullMap}>
+      <MapView ref={mapRef} style={StyleSheet.absoluteFillObject} initialRegion={{...location, latitudeDelta:0.018, longitudeDelta:0.018}} showsUserLocation showsMyLocationButton={false} showsCompass={false} showsScale={false} showsBuildings mapType="standard" toolbarEnabled zoomEnabled>
+        <Marker coordinate={location} title="Իմ դիրքը" description="AXAS Driver">
+          <View style={styles.driverMarker}><View style={styles.driverArrow}/></View>
+        </Marker>
+      </MapView>
+      <View style={styles.mapTopOverlay}>
+        <View style={styles.mapBrand}><Text style={styles.brand}>AXAS <Text style={styles.brandAccent}>DRIVER</Text></Text><Text style={styles.mapGps}>{gpsReady ? "GPS • ԱԿՏԻՎ" : "GPS • ՍՊԱՍՈՒՄ"}</Text></View>
+        <TouchableOpacity onPress={toggleOnline} style={[styles.mapOnlineButton, online && styles.mapOnlineButtonOn]}><View style={[styles.tinyDot, online && styles.statusDotOn]}/><Text style={styles.mapOnlineText}>{online ? "ԱՌՑԱՆՑ" : "ԱՆՑԱՆՑ"}</Text></TouchableOpacity>
+      </View>
+      <View style={styles.mapControlsFull}>
+        <TouchableOpacity style={styles.mapControl} onPress={() => zoomMap(0.55)}><Text style={styles.mapControlText}>+</Text></TouchableOpacity>
+        <TouchableOpacity style={styles.mapControl} onPress={() => zoomMap(1.8)}><Text style={styles.mapControlText}>−</Text></TouchableOpacity>
+        <TouchableOpacity style={styles.mapControl} onPress={() => mapRef.current?.animateToRegion({...location, latitudeDelta:0.018, longitudeDelta:0.018},300)}><Text style={styles.mapControlText}>◎</Text></TouchableOpacity>
+      </View>
+    </View> : <>
+      <View style={styles.topBar}><Text style={styles.brand}>AXAS <Text style={styles.brandAccent}>DRIVER</Text></Text><View style={[styles.topStatus, online && styles.topStatusOn]}><View style={[styles.tinyDot, online && styles.statusDotOn]}/><Text style={styles.topStatusText}>{online ? "Առցանց" : "Անցանց"}</Text></View></View>
+      <ScrollView style={styles.scroll} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>{screens[tab]()}</ScrollView>
+    </>}
     <View style={styles.tabBar}>{TABS.map(item => <TouchableOpacity key={item.id} style={[styles.tabItem, item.id==="tasks" && styles.tabCenter]} onPress={() => setTab(item.id)}>{item.id==="tasks" ? <View style={styles.tabCenterIcon}><Text style={{fontSize:22,color:"#061810",fontWeight:"900"}}>{item.icon}</Text></View> : <Text style={[styles.tabIcon, tab===item.id && styles.tabActive]}>{item.icon}</Text>}<Text style={[styles.tabLabel, tab===item.id && styles.tabActive]}>{item.label}</Text>{tab===item.id && <View style={styles.tabIndicator}/>}</TouchableOpacity>)}</View>
   </SafeAreaView>;
 }
 
 const styles = StyleSheet.create({
   safe:{flex:1,backgroundColor:"#080E19"},
+  fullMap:{flex:1,backgroundColor:"#101A29"},
+  mapTopOverlay:{position:"absolute",top:10,left:12,right:12,flexDirection:"row",alignItems:"center",justifyContent:"space-between"},
+  mapBrand:{backgroundColor:"#091321E8",paddingHorizontal:13,paddingVertical:9,borderRadius:13,borderWidth:1,borderColor:"#26364B"},
+  mapGps:{color:"#20D6A0",fontSize:8,fontWeight:"900",letterSpacing:1,marginTop:3},
+  mapOnlineButton:{flexDirection:"row",alignItems:"center",gap:7,backgroundColor:"#101D2DEB",paddingHorizontal:14,paddingVertical:12,borderRadius:13,borderWidth:1,borderColor:"#39485C"},
+  mapOnlineButtonOn:{backgroundColor:"#10372E",borderColor:"#20D6A0"},
+  mapOnlineText:{color:"#FFFFFF",fontSize:10,fontWeight:"900",letterSpacing:.8},
+  mapControlsFull:{position:"absolute",right:12,bottom:18,gap:8},
   topBar:{height:58,paddingHorizontal:19,flexDirection:"row",alignItems:"center",justifyContent:"space-between",borderBottomWidth:1,borderBottomColor:"#182438"},
   brand:{fontSize:20,fontWeight:"900",letterSpacing:1.2,color:"#F5F8FC"},brandAccent:{color:"#20D6A0"},
   topStatus:{flexDirection:"row",alignItems:"center",gap:7,paddingHorizontal:11,paddingVertical:7,borderRadius:20,backgroundColor:"#222D3D"},topStatusOn:{backgroundColor:"#10372E"},
@@ -122,5 +149,5 @@ const styles = StyleSheet.create({
   row:{flexDirection:"row",alignItems:"center",backgroundColor:"#111C2C",padding:13,borderRadius:14,marginTop:9,borderWidth:1,borderColor:"#202F43"},rowIcon:{width:34,height:34,borderRadius:11,backgroundColor:"#1B2C40",alignItems:"center",justifyContent:"center",marginRight:11},rowIconText:{color:"#20D6A0",fontSize:16,fontWeight:"800"},rowTitle:{color:"#F0F4F9",fontSize:12,fontWeight:"800"},rowDetail:{color:"#8291A6",fontSize:10,marginTop:3},chevron:{color:"#71829A",fontSize:23,marginLeft:8},
   balanceCard:{backgroundColor:"#10372E",borderRadius:18,padding:20,borderWidth:1,borderColor:"#1A654F"},balanceCaption:{color:"#A2CDBF",fontSize:9,fontWeight:"900",letterSpacing:1.2},balanceValue:{color:"#FFFFFF",fontSize:32,fontWeight:"900",marginTop:8},balanceFoot:{color:"#A2CDBF",fontSize:10,marginTop:5},
   profileCard:{alignItems:"center",backgroundColor:"#121E2F",padding:20,borderRadius:18,borderWidth:1,borderColor:"#24344A",marginBottom:7},bigAvatar:{width:66,height:66,borderRadius:23,backgroundColor:"#1A3445",borderWidth:1,borderColor:"#20D6A0",alignItems:"center",justifyContent:"center"},bigAvatarText:{color:"#20D6A0",fontSize:29,fontWeight:"900"},profileName:{color:"#F5F8FC",fontSize:16,fontWeight:"900",marginTop:10},profileStatus:{color:"#8392A7",fontSize:10,marginTop:4},
-  tabBar:{height:76,backgroundColor:"#0D1726",borderTopWidth:1,borderTopColor:"#1C2A3E",flexDirection:"row",justifyContent:"space-around",alignItems:"center",paddingBottom:4},tabItem:{flex:1,alignItems:"center",justifyContent:"center",height:"100%",gap:3},tabCenter:{transform:[{translateY:-9}]},tabCenterIcon:{width:48,height:48,borderRadius:17,backgroundColor:"#20D6A0",alignItems:"center",justifyContent:"center",marginBottom:-1,elevation:9},tabIcon:{fontSize:18,color:"#718198"},tabLabel:{fontSize:8,color:"#718198",fontWeight:"700"},tabActive:{color:"#20D6A0"},tabIndicator:{position:"absolute",top:0,width:24,height:2,backgroundColor:"#20D6A0",borderRadius:2}
+  tabBar:{height:76,backgroundColor:"#080E19",borderTopWidth:1,borderTopColor:"#1C2A3E",flexDirection:"row",justifyContent:"space-around",alignItems:"center",paddingBottom:4},tabItem:{flex:1,alignItems:"center",justifyContent:"center",height:"100%",gap:3},tabCenter:{transform:[{translateY:-9}]},tabCenterIcon:{width:48,height:48,borderRadius:17,backgroundColor:"#20D6A0",alignItems:"center",justifyContent:"center",marginBottom:-1,elevation:9},tabIcon:{fontSize:18,color:"#718198"},tabLabel:{fontSize:8,color:"#718198",fontWeight:"700"},tabActive:{color:"#20D6A0"},tabIndicator:{position:"absolute",top:0,width:24,height:2,backgroundColor:"#20D6A0",borderRadius:2}
 });
