@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "AXAS Driver",
-    "slug": "axas-driver",
+    "name": "TAXI LIDER",
+    "slug": "taxi-lider",
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "dark",
@@ -11,7 +11,8 @@
       "permissions": [
         "ACCESS_COARSE_LOCATION",
         "ACCESS_FINE_LOCATION"
-      ]
+      ],
+      "label": "TAXI LIDER"
     },
     "ios": {
       "supportsTablet": false
@@ -20,7 +21,7 @@
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "AXAS Driver-ը օգտագործում է տեղադրությունը՝ վարորդի դիրքը քարտեզում ցույց տալու համար։"
+          "locationWhenInUsePermission": "TAXI LIDER-ը օգտագործում է տեղադրությունը՝ վարորդի դիրքը քարտեզում ցույց տալու համար։"
         }
       ]
     ]
