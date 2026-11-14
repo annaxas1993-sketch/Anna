@@ -31,22 +31,32 @@ export default function App() {
   const mapRef = useRef(null);
   const destination = { latitude: location.latitude + 0.0065, longitude: location.longitude + 0.0075 };
   const zoomMap = (factor) => mapRef.current?.injectJavaScript(`window.axasZoom && window.axasZoom(${factor}); true;`);
-  const mapHtml = `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"><link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"><style>html,body,#map{height:100%;width:100%;margin:0;background:#101a29} .leaflet-control-attribution{background:#091321cc!important;color:#b9c5d3!important;font-size:9px!important}.leaflet-control-attribution a{color:#20d6a0!important}.leaflet-control-zoom a{background:#0c1728!important;color:#fff!important;border-color:#40536b!important}.driver-dot{width:22px;height:22px;border-radius:50%;background:#20d6a0;border:4px solid white;box-shadow:0 2px 12px #000;position:relative}.driver-dot:after{content:'';position:absolute;left:5px;top:3px;border-left:4px solid transparent;border-right:4px solid transparent;border-bottom:9px solid #063326}</style></head><body><div id="map"></div><script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><script>const map=L.map('map',{zoomControl:false}).setView([${location.latitude},${location.longitude}],15);L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{subdomains:'abcd',maxZoom:20,attribution:'© OpenStreetMap © CARTO'}).addTo(map);const icon=L.divIcon({className:'',html:'<div class="driver-dot"></div>',iconSize:[30,30],iconAnchor:[15,15]});const marker=L.marker([${location.latitude},${location.longitude}],{icon}).addTo(map).bindPopup('AXAS Driver • Իմ դիրքը');window.axasZoom=function(f){map.setZoom(Math.max(3,Math.min(20,map.getZoom()+(f<1?1:-1))))};window.axasLocate=function(){map.setView([${location.latitude},${location.longitude}],16)};setTimeout(()=>map.invalidateSize(),300);</script></body></html>`;
+  const mapHtml = `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"><link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"><style>html,body,#map{height:100%;width:100%;margin:0;background:#101a29} .leaflet-control-attribution{background:#091321cc!important;color:#b9c5d3!important;font-size:9px!important}.leaflet-control-attribution a{color:#20d6a0!important}.leaflet-control-zoom a{background:#0c1728!important;color:#fff!important;border-color:#40536b!important}.driver-dot{width:22px;height:22px;border-radius:50%;background:#20d6a0;border:4px solid white;box-shadow:0 2px 12px #000;position:relative}.driver-dot:after{content:'';position:absolute;left:5px;top:3px;border-left:4px solid transparent;border-right:4px solid transparent;border-bottom:9px solid #063326}</style></head><body><div id="map"></div><script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><script>const map=L.map('map',{zoomControl:false}).setView([${location.latitude},${location.longitude}],15);L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{subdomains:'abcd',maxZoom:20,attribution:'© OpenStreetMap © CARTO'}).addTo(map);const icon=L.divIcon({className:'',html:'<div class="driver-dot"></div>',iconSize:[30,30],iconAnchor:[15,15]});const marker=L.marker([${location.latitude},${location.longitude}],{icon}).addTo(map).bindPopup('AXAS Driver • Իմ դիրքը');window.axasZoom=function(f){map.setZoom(Math.max(3,Math.min(20,map.getZoom()+(f<1?1:-1))))};window.axasLocate=function(){map.setView([${location.latitude},${location.longitude}],16)};window.axasSetPosition=function(lat,lng){marker.setLatLng([lat,lng]);map.panTo([lat,lng],{animate:true,duration:.5})};setTimeout(()=>map.invalidateSize(),500);</script></body></html>`;
 
   useEffect(() => {
     let active = true;
+    let subscription;
     (async () => {
       const permission = await Location.requestForegroundPermissionsAsync();
-      if (permission.status !== "granted") return;
+      if (permission.status !== "granted" || !active) return;
       const current = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-      if (active) {
-        const next = { latitude: current.coords.latitude, longitude: current.coords.longitude };
-        setLocation(next);
-        setGpsReady(true);
-        mapRef.current?.animateToRegion({ ...next, latitudeDelta: 0.018, longitudeDelta: 0.018 }, 500);
-      }
+      if (!active) return;
+      const next = { latitude: current.coords.latitude, longitude: current.coords.longitude };
+      setLocation(next);
+      setGpsReady(true);
+      mapRef.current?.injectJavaScript(`window.axasSetPosition && window.axasSetPosition(${next.latitude},${next.longitude}); true;`);
+      subscription = await Location.watchPositionAsync(
+        { accuracy: Location.Accuracy.Balanced, timeInterval: 5000, distanceInterval: 10 },
+        (position) => {
+          if (!active) return;
+          const point = { latitude: position.coords.latitude, longitude: position.coords.longitude };
+          setLocation(point);
+          setGpsReady(true);
+          mapRef.current?.injectJavaScript(`window.axasSetPosition && window.axasSetPosition(${point.latitude},${point.longitude}); true;`);
+        }
+      );
     })().catch(() => {});
-    return () => { active = false; };
+    return () => { active = false; subscription?.remove(); };
   }, []);
 
   const toggleOnline = () => {
@@ -63,7 +73,7 @@ export default function App() {
   return <SafeAreaView style={styles.safe}>
     <StatusBar barStyle="light-content" backgroundColor="#080E19"/>
     {tab === "home" ? <View style={styles.fullMap}>
-      <WebView ref={mapRef} style={StyleSheet.absoluteFillObject} source={{ html: mapHtml, baseUrl: "https://localhost" }} originWhitelist={["*"]} javaScriptEnabled domStorageEnabled mixedContentMode="always" setSupportMultipleWindows={false} onLoadEnd={() => mapRef.current?.injectJavaScript("window.axasLocate && window.axasLocate(); true;")} />
+      <WebView ref={mapRef} style={StyleSheet.absoluteFillObject} source={{ html: mapHtml, baseUrl: "https://www.openstreetmap.org" }} originWhitelist={["*"]} javaScriptEnabled domStorageEnabled setSupportMultipleWindows={false} cacheEnabled onLoadEnd={() => mapRef.current?.injectJavaScript("window.axasLocate && window.axasLocate(); true;")} />
       <View style={styles.mapTopOverlay}>
         <View style={styles.mapBrand}><Text style={styles.brand}>AXAS <Text style={styles.brandAccent}>DRIVER</Text></Text><Text style={styles.mapGps}>{gpsReady ? "GPS • ԱԿՏԻՎ" : "GPS • ՍՊԱՍՈՒՄ"}</Text></View>
         <TouchableOpacity onPress={toggleOnline} style={[styles.mapOnlineButton, online && styles.mapOnlineButtonOn]}><View style={[styles.tinyDot, online && styles.statusDotOn]}/><Text style={styles.mapOnlineText}>{online ? "ԱՌՑԱՆՑ" : "ԱՆՑԱՆՑ"}</Text></TouchableOpacity>
