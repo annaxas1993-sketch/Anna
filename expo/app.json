@@ -1,0 +1,28 @@
+{
+  "expo": {
+    "name": "AXAS Driver",
+    "slug": "axas-driver",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "newArchEnabled": true,
+    "android": {
+      "package": "am.axas.driver.expo",
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION"
+      ]
+    },
+    "ios": {
+      "supportsTablet": false
+    },
+    "plugins": [
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "AXAS Driver-ը օգտագործում է տեղադրությունը՝ վարորդի դիրքը քարտեզում ցույց տալու համար։"
+        }
+      ]
+    ]
+  }
+}
