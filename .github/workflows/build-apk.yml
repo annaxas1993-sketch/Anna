@@ -1,26 +1,42 @@
-name: Build AXAS Driver APK
+name: Build TAXI LIDER Android APK
 on:
   push:
     branches: [main]
+    paths:
+      - 'expo/**'
+      - '.github/workflows/build-apk.yml'
   workflow_dispatch:
 permissions:
   contents: read
 jobs:
   build:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: expo
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: expo/package-lock.json
+      - name: Install dependencies
+        run: npm install
+      - name: Generate native Android project
+        run: npx expo prebuild --platform android --non-interactive
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
-      - uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: '8.9'
-      - name: Build debug APK
-        run: gradle assembleDebug
+      - name: Build release APK
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleRelease
       - uses: actions/upload-artifact@v4
         with:
-          name: AXAS-Driver-Debug-APK
-          path: app/build/outputs/apk/debug/app-debug.apk
+          name: TAXI-LIDER-APK
+          path: expo/android/app/build/outputs/apk/release/app-release.apk
+          if-no-files-found: error
           retention-days: 30
