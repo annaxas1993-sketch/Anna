@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { SafeAreaView, View, Text, StyleSheet, TouchableOpacity, StatusBar, ScrollView, Alert } from "react-native";
-import MapView, { Marker, Polyline } from "react-native-maps";
+import MapView, { Marker, Polyline, UrlTile } from "react-native-maps";
 import * as Location from "expo-location";
 
 const DEFAULT_LOCATION = { latitude: 40.8128, longitude: 44.4883 };
@@ -71,7 +71,8 @@ export default function App() {
     </View>
     <View style={styles.sectionHeading}><Text style={styles.sectionTitle}>ՔԱՐՏԵԶ ԵՎ ԴԻՐՔ</Text><Text style={styles.liveTag}>● GPS</Text></View>
     <View style={styles.mapCard}>
-      <MapView ref={mapRef} style={styles.map} initialRegion={{...location, latitudeDelta:0.025, longitudeDelta:0.025}} showsUserLocation={false} showsMyLocationButton={false} showsCompass showsScale showsBuildings mapType="standard" toolbarEnabled zoomEnabled>
+      <MapView ref={mapRef} style={styles.map} initialRegion={{...location, latitudeDelta:0.025, longitudeDelta:0.025}} showsUserLocation={false} showsMyLocationButton={false} showsCompass showsScale showsBuildings mapType="none" toolbarEnabled zoomEnabled>
+        <UrlTile urlTemplate="https://basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" maximumZ={20} tileSize={256} />
         <Polyline coordinates={[location, destination]} strokeColor="#20D6A0" strokeWidth={5} lineDashPattern={[0]}/>
         <Marker coordinate={location} title="A • Իմ դիրքը" description="AXAS Driver">
           <View style={styles.driverMarker}><View style={styles.driverArrow}/></View>
@@ -104,6 +105,7 @@ export default function App() {
         <View style={styles.mapBrand}><Text style={styles.brand}>AXAS <Text style={styles.brandAccent}>DRIVER</Text></Text><Text style={styles.mapGps}>{gpsReady ? "GPS • ԱԿՏԻՎ" : "GPS • ՍՊԱՍՈՒՄ"}</Text></View>
         <TouchableOpacity onPress={toggleOnline} style={[styles.mapOnlineButton, online && styles.mapOnlineButtonOn]}><View style={[styles.tinyDot, online && styles.statusDotOn]}/><Text style={styles.mapOnlineText}>{online ? "ԱՌՑԱՆՑ" : "ԱՆՑԱՆՑ"}</Text></TouchableOpacity>
       </View>
+      <View style={styles.mapAttribution}><Text style={styles.mapAttributionText}>© OpenStreetMap • © CARTO</Text></View>
       <View style={styles.mapControlsFull}>
         <TouchableOpacity style={styles.mapControl} onPress={() => zoomMap(0.55)}><Text style={styles.mapControlText}>+</Text></TouchableOpacity>
         <TouchableOpacity style={styles.mapControl} onPress={() => zoomMap(1.8)}><Text style={styles.mapControlText}>−</Text></TouchableOpacity>
@@ -126,6 +128,8 @@ const styles = StyleSheet.create({
   mapOnlineButton:{flexDirection:"row",alignItems:"center",gap:7,backgroundColor:"#101D2DEB",paddingHorizontal:14,paddingVertical:12,borderRadius:13,borderWidth:1,borderColor:"#39485C"},
   mapOnlineButtonOn:{backgroundColor:"#10372E",borderColor:"#20D6A0"},
   mapOnlineText:{color:"#FFFFFF",fontSize:10,fontWeight:"900",letterSpacing:.8},
+  mapAttribution:{position:"absolute",left:9,bottom:8,backgroundColor:"#091321D9",paddingHorizontal:7,paddingVertical:4,borderRadius:5},
+  mapAttributionText:{color:"#C5CFDA",fontSize:8},
   mapControlsFull:{position:"absolute",right:12,bottom:18,gap:8},
   topBar:{height:58,paddingHorizontal:19,flexDirection:"row",alignItems:"center",justifyContent:"space-between",borderBottomWidth:1,borderBottomColor:"#182438"},
   brand:{fontSize:20,fontWeight:"900",letterSpacing:1.2,color:"#F5F8FC"},brandAccent:{color:"#20D6A0"},
