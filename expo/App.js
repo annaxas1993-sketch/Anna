@@ -92,7 +92,7 @@ export default function App() {
 const styles = StyleSheet.create({
   safe:{flex:1,backgroundColor:"#080E19"},
   fullMap:{flex:1,backgroundColor:"#101A29"},
-  mapTopOverlay:{position:"absolute",top:10,left:12,right:12,flexDirection:"row",alignItems:"center",justifyContent:"space-between"},
+  mapTopOverlay:{position:"absolute",top:10,left:12,right:12,flexDirection:"row",alignItems:"flex-start",justifyContent:"flex-start"},
   mapBrand:{backgroundColor:"#091321E8",paddingHorizontal:10,paddingVertical:7,borderRadius:11,borderWidth:1,borderColor:"#26364B"},mapBrandTitle:{fontSize:14,fontWeight:"900",letterSpacing:.8,color:"#F5F8FC"},
   mapGps:{color:"#20D6A0",fontSize:8,fontWeight:"900",letterSpacing:1,marginTop:3},
   mapOnlineButton:{flexDirection:"row",alignItems:"center",gap:7,backgroundColor:"#101D2DEB",paddingHorizontal:14,paddingVertical:12,borderRadius:13,borderWidth:1,borderColor:"#39485C"},
