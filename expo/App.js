@@ -54,46 +54,12 @@ export default function App() {
     if (!online) Alert.alert("Առցանց ռեժիմ", "Դիզայնի ցուցադրական ռեժիմ է․ իրական պատվերներ ստանալու համար պետք է միացնել սերվերը։");
   };
 
-  const renderHome = () => <>
-    <View style={styles.welcomeLine}>
-      <View><Text style={styles.eyebrow}>ԲԱՐԻ ԳԱԼՈՒՍՏ, ՎԱՐՈՐԴ</Text><Text style={styles.pageTitle}>Քո աշխատանքային օրը</Text></View>
-      <View style={styles.avatar}><Text style={styles.avatarText}>A</Text></View>
-    </View>
-    <View style={styles.statusCard}>
-      <View style={{flex:1}}>
-        <View style={styles.statusLabelLine}><View style={[styles.statusDot, online && styles.statusDotOn]} /><Text style={styles.statusLabel}>{online ? "ԴՈՒ ԱՌՑԱՆՑ ԵՍ" : "ԴՈՒ ԱՆՑԱՆՑ ԵՍ"}</Text></View>
-        <Text style={styles.statusHeadline}>{online ? "Պատրաստ ես պատվերների" : "Սկսի՛ր աշխատանքը"}</Text>
-        <Text style={styles.statusHint}>{gpsReady ? "GPS-ը միացված է" : "Սպասում ենք GPS դիրքին"}</Text>
-      </View>
-      <TouchableOpacity onPress={toggleOnline} style={[styles.goButton, online && styles.stopButton]}><Text style={styles.goButtonText}>{online ? "ԱՆՑԱՆՑ" : "ՍԿՍԵԼ"}</Text></TouchableOpacity>
-    </View>
-    <View style={styles.metricsCard}>
-      <Metric value="0 ֏" label="Այսօրվա եկամուտ" /><View style={styles.metricDivider}/><Metric value="0" label="Պատվերներ"/><View style={styles.metricDivider}/><Metric value="0" label="Ուղևորություններ"/>
-    </View>
-    <View style={styles.sectionHeading}><Text style={styles.sectionTitle}>ՔԱՐՏԵԶ ԵՎ ԴԻՐՔ</Text><Text style={styles.liveTag}>● GPS</Text></View>
-    <View style={styles.mapCard}>
-      <MapView ref={mapRef} style={styles.map} initialRegion={{...location, latitudeDelta:0.025, longitudeDelta:0.025}} showsUserLocation={false} showsMyLocationButton={false} showsCompass showsScale showsBuildings mapType="none" toolbarEnabled zoomEnabled>
-        <UrlTile urlTemplate="https://basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" maximumZ={20} tileSize={256} />
-        <Polyline coordinates={[location, destination]} strokeColor="#20D6A0" strokeWidth={5} lineDashPattern={[0]}/>
-        <Marker coordinate={location} title="A • Իմ դիրքը" description="AXAS Driver">
-          <View style={styles.driverMarker}><View style={styles.driverArrow}/></View>
-        </Marker>
-        <Marker coordinate={destination} title="B • Ուղղություն" description="Օրինակային կետ" pinColor="#F5A623"/>
-      </MapView>
-      <View style={styles.mapPill}><Text style={styles.mapPillText}>AXAS • LIVE MAP</Text></View>
-      <View style={styles.routePill}><Text style={styles.routePillText}>A</Text><View style={styles.routeDash}/><Text style={styles.routePillText}>B</Text><Text style={styles.routeCaption}>Օրինակային ուղղություն</Text></View>
-      <View style={styles.mapControls}><TouchableOpacity style={styles.mapControl} onPress={() => zoomMap(0.55)}><Text style={styles.mapControlText}>+</Text></TouchableOpacity><TouchableOpacity style={styles.mapControl} onPress={() => zoomMap(1.8)}><Text style={styles.mapControlText}>−</Text></TouchableOpacity><TouchableOpacity style={styles.mapControl} onPress={() => mapRef.current?.animateToRegion({...location, latitudeDelta:0.025, longitudeDelta:0.025},300)}><Text style={styles.mapControlText}>◎</Text></TouchableOpacity></View>
-    </View>
-    <View style={styles.sectionHeading}><Text style={styles.sectionTitle}>ԱՇԽԱՏԱՆՔԱՅԻՆ ԿԱՐԳԱՎԻՃԱԿ</Text></View>
-    <View style={styles.infoCard}><Text style={styles.infoTitle}>{online ? "Սպասում ենք նոր պատվերի" : "Միացրու առցանց ռեժիմը"}</Text><Text style={styles.infoText}>{online ? "Նոր պատվերները կհայտնվեն Պատվերներ բաժնում, երբ սերվերը միացված լինի։" : "Առցանց դառնալուց հետո կարող ես ստանալ ուղևորությունների առաջարկներ։"}</Text></View>
-  </>;
-
   const renderOrders = () => <><Text style={styles.pageTitle}>Պատվերներ</Text><Text style={styles.pageSubtitle}>Նոր առաջարկներ և ընթացիկ ուղևորություններ</Text><View style={styles.emptyCard}><Text style={styles.emptyIcon}>▣</Text><Text style={styles.emptyTitle}>Դեռ պատվերներ չկան</Text><Text style={styles.emptyText}>Երբ սերվերը միացված լինի, այստեղ կհայտնվեն հասանելի պատվերները։</Text><TouchableOpacity style={styles.outlineButton} onPress={() => setTab("home")}><Text style={styles.outlineButtonText}>ԳԼԽԱՎՈՐ ԷՋ</Text></TouchableOpacity></View></>;
   const renderTasks = () => <><Text style={styles.pageTitle}>Առաջադրանքներ</Text><Text style={styles.pageSubtitle}>Բոնուսներ և օրվա նպատակներ</Text><View style={styles.infoCard}><Text style={styles.infoTitle}>Օրվա նպատակ</Text><Text style={styles.infoText}>Առաջադրանքները և բոնուսները կցուցադրվեն այստեղ՝ սերվերի միացումից հետո։</Text><View style={styles.progressTrack}><View style={styles.progressFill}/></View><Text style={styles.mutedSmall}>0 / 10 ուղևորություն</Text></View><Row title="Շաբաթական բոնուս" detail="Առաջընթացը դեռ հասանելի չէ" icon="★"/><Row title="Ակտիվության միավորներ" detail="Կհաշվարկվեն ուղևորություններից" icon="↗"/></>;
   const renderBalance = () => <><Text style={styles.pageTitle}>Հաշվեկշիռ</Text><Text style={styles.pageSubtitle}>Եկամուտներ և վճարումների պատմություն</Text><View style={styles.balanceCard}><Text style={styles.balanceCaption}>ԸՆԴՀԱՆՈՒՐ ՀԱՇՎԵԿՇԻՌ</Text><Text style={styles.balanceValue}>0 ֏</Text><Text style={styles.balanceFoot}>Ցուցադրական տվյալներ</Text></View><View style={styles.sectionHeading}><Text style={styles.sectionTitle}>ԳՈՐԾԱՐՔՆԵՐ</Text></View><View style={styles.emptyCard}><Text style={styles.emptyTitle}>Գործարքներ դեռ չկան</Text><Text style={styles.emptyText}>Ուղևորությունների վճարումները կերևան այստեղ։</Text></View></>;
   const renderProfile = () => <><Text style={styles.pageTitle}>Իմ պրոֆիլը</Text><Text style={styles.pageSubtitle}>Վարորդի տվյալներ և կարգավորումներ</Text><View style={styles.profileCard}><View style={styles.bigAvatar}><Text style={styles.bigAvatarText}>A</Text></View><Text style={styles.profileName}>AXAS վարորդ</Text><Text style={styles.profileStatus}>Նոր հաշիվ • Տվյալները լրացված չեն</Text></View><Row title="Անձնական տվյալներ" detail="Անուն, հեռախոս և լուսանկար" icon="●"/><Row title="Մեքենայի տվյալներ" detail="Մակնիշ, համարանիշ և գույն" icon="▰"/><Row title="Փաստաթղթեր" detail="Վարորդական իրավունք և գրանցում" icon="▤"/><Row title="Սակագներ" detail="Ծառայության տեսակներ" icon="₽"/><Row title="Կարգավորումներ" detail="Ծանուցումներ և հավելված" icon="⚙"/><Row title="Օգնություն և աջակցություն" detail="Կապ օպերատորի հետ" icon="?"/> </>;
 
-  const screens = {home:renderHome, orders:renderOrders, tasks:renderTasks, balance:renderBalance, profile:renderProfile};
+  const screens = {orders:renderOrders, tasks:renderTasks, balance:renderBalance, profile:renderProfile};
   return <SafeAreaView style={styles.safe}>
     <StatusBar barStyle="light-content" backgroundColor="#080E19"/>
     {tab === "home" ? <View style={styles.fullMap}>
