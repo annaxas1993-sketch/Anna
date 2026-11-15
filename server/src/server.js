@@ -5,8 +5,9 @@ const {z}=require("zod"), db=require("./db"), {sign,auth,roles}=require("./auth"
 if(!process.env.JWT_SECRET||!process.env.DATABASE_URL){console.error("Missing DATABASE_URL or JWT_SECRET");process.exit(1);}
 const app=express(), server=http.createServer(app);
 const io=new Server(server,{cors:{origin:process.env.CORS_ORIGIN||"*",methods:["GET","POST"]}});
-app.use(helmet()); app.use(cors({origin:process.env.CORS_ORIGIN||"*"})); app.use(express.json({limit:"32kb"}));
+app.use(helmet({contentSecurityPolicy:false})); app.use(cors({origin:process.env.CORS_ORIGIN||"*"})); app.use(express.json({limit:"32kb"}));
 app.use(rateLimit({windowMs:60000,limit:120,standardHeaders:true,legacyHeaders:false}));
+app.use(express.static(require("path").join(__dirname,"../public")));
 const phone=z.string().min(6).max(24), coords=z.object({lat:z.number().min(-90).max(90),lng:z.number().min(-180).max(180)});
 const wrap=fn=>(req,res,next)=>Promise.resolve(fn(req,res,next)).catch(next);
 app.get("/health",(req,res)=>res.json({ok:true,service:"AXAS Driver API"}));
@@ -40,6 +41,23 @@ app.post("/api/orders/:id/accept",auth,roles("driver"),wrap(async(req,res)=>{con
 app.post("/api/orders/:id/status",auth,roles("driver"),wrap(async(req,res)=>{const status=z.enum(["arrived","started","completed","cancelled"]).parse(req.body.status);const r=await db.query("UPDATE orders SET status=$1,started_at=CASE WHEN $1='started' THEN NOW() ELSE started_at END,completed_at=CASE WHEN $1='completed' THEN NOW() ELSE completed_at END WHERE id=$2 AND driver_id=$3 AND status IN ('accepted','arrived','started') RETURNING *",[status,req.params.id,req.user.sub]);if(!r.rowCount)return res.status(409).json({error:"Հնարավոր չէ փոխել պատվերի վիճակը"});io.emit("order:updated",r.rows[0]);res.json({order:r.rows[0]});}));
 app.get("/api/orders/mine",auth,wrap(async(req,res)=>{const col=req.user.role==="driver"?"driver_id":"passenger_id";const r=await db.query(`SELECT * FROM orders WHERE ${col}=$1 ORDER BY created_at DESC LIMIT 100`,[req.user.sub]);res.json({orders:r.rows});}));
 app.get("/api/admin/drivers",auth,roles("admin"),wrap(async(req,res)=>{const r=await db.query("SELECT u.id,u.name,u.phone,u.car_model,u.plate_number,u.is_online,l.lat,l.lng,l.updated_at FROM users u LEFT JOIN driver_locations l ON l.driver_id=u.id WHERE u.role='driver' ORDER BY u.created_at DESC");res.json({drivers:r.rows});}));
+
+app.get("/api/admin/orders",auth,roles("admin"),wrap(async(req,res)=>{
+ const r=await db.query("SELECT o.*,p.name AS passenger_name,p.phone AS passenger_phone,d.name AS driver_name,d.phone AS driver_phone FROM orders o JOIN users p ON p.id=o.passenger_id LEFT JOIN users d ON d.id=o.driver_id ORDER BY o.created_at DESC LIMIT 200");
+ res.json({orders:r.rows});
+}));
+app.patch("/api/admin/orders/:id/assign",auth,roles("admin"),wrap(async(req,res)=>{
+ const b=z.object({driver_id:z.string().uuid()}).parse(req.body);
+ const r=await db.query("UPDATE orders SET driver_id=$1,status='accepted',accepted_at=NOW() WHERE id=$2 AND status='searching' AND EXISTS(SELECT 1 FROM users WHERE id=$1 AND role='driver') RETURNING *",[b.driver_id,req.params.id]);
+ if(!r.rowCount)return res.status(409).json({error:"Պատվերը հասանելի չէ կամ վարորդը չի գտնվել"});
+ io.emit("order:updated",r.rows[0]);io.to("user:"+b.driver_id).emit("order:assigned",r.rows[0]);res.json({order:r.rows[0]});
+}));
+app.patch("/api/admin/orders/:id/status",auth,roles("admin"),wrap(async(req,res)=>{
+ const status=z.enum(["cancelled","completed"]).parse(req.body.status);
+ const r=await db.query("UPDATE orders SET status=$1,completed_at=CASE WHEN $1='completed' THEN NOW() ELSE completed_at END WHERE id=$2 AND status NOT IN ('completed','cancelled') RETURNING *",[status,req.params.id]);
+ if(!r.rowCount)return res.status(409).json({error:"Պատվերի վիճակը հնարավոր չէ փոխել"});
+ io.emit("order:updated",r.rows[0]);res.json({order:r.rows[0]});
+}));
 io.use((s,next)=>{try{s.user=require("jsonwebtoken").verify(s.handshake.auth?.token,process.env.JWT_SECRET);next();}catch{next(new Error("unauthorized"));}});
 io.on("connection",s=>{if(s.user.role==="driver")s.join("drivers");if(s.user.role==="admin")s.join("admins");s.join("user:"+s.user.sub);});
 app.use((err,req,res,next)=>{if(err instanceof z.ZodError)return res.status(400).json({error:"Տվյալները սխալ են",details:err.issues});if(err.code==="23505")return res.status(409).json({error:"Այս հեռախոսահամարն արդեն գրանցված է"});console.error(err);res.status(500).json({error:"Սերվերի ներքին սխալ"});});
