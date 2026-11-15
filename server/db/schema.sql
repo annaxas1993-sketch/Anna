@@ -105,3 +105,7 @@ CREATE TABLE IF NOT EXISTS driver_vehicle_checks (
 );
 CREATE INDEX IF NOT EXISTS driver_vehicle_checks_driver_created_idx
  ON driver_vehicle_checks(driver_id,created_at DESC);
+
+-- Allow dispatcher to reject an order
+ALTER TABLE orders DROP CONSTRAINT IF EXISTS orders_status_check;
+ALTER TABLE orders ADD CONSTRAINT orders_status_check CHECK(status IN ('searching','accepted','arrived','started','completed','cancelled','rejected'));
