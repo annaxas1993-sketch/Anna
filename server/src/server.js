@@ -101,7 +101,21 @@ app.post("/api/admin/orders",auth,roles("admin"),wrap(async(req,res)=>{
  const r=await db.query("INSERT INTO orders(passenger_name,passenger_phone,pickup_address,destination_address,pickup_lat,pickup_lng,dest_lat,dest_lng,note,status) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,'searching') RETURNING *",[b.passenger_name,b.passenger_phone,b.pickup_address,b.destination_address,b.pickup.lat,b.pickup.lng,b.destination.lat,b.destination.lng,b.note||null]);
  io.to("admins").emit("order:new",r.rows[0]);res.status(201).json({order:r.rows[0]});
 }));
-app.get("/api/admin/drivers",auth,roles("admin"),wrap(async(req,res)=>{const r=await db.query("SELECT u.id,u.name,u.phone,u.car_model,u.plate_number,u.driver_license_number,u.approval_status,u.is_online,l.lat,l.lng,l.updated_at FROM users u LEFT JOIN driver_locations l ON l.driver_id=u.id WHERE u.role='driver' ORDER BY CASE u.approval_status WHEN 'pending' THEN 0 WHEN 'approved' THEN 1 ELSE 2 END,u.created_at DESC");res.json({drivers:r.rows});}));
+app.post("/api/admin/drivers/:id/balance/topup",auth,roles("admin"),wrap(async(req,res)=>{
+ const b=z.object({amount:z.number().positive().max(1000000),note:z.string().max(240).optional()}).parse(req.body);
+ const client=await db.pool.connect();
+ try{
+  await client.query("BEGIN");
+  const updated=await client.query("UPDATE users SET balance=balance+$1 WHERE id=$2 AND role='driver' RETURNING id,name,balance",[b.amount,req.params.id]);
+  if(!updated.rowCount){await client.query("ROLLBACK");return res.status(404).json({error:"Վարորդը չի գտնվել"});}
+  const tx=await client.query("INSERT INTO driver_balance_transactions(driver_id,admin_id,amount,note) VALUES($1,$2,$3,$4) RETURNING id,amount,note,created_at",[req.params.id,req.user.sub,b.amount,b.note||null]);
+  await client.query("COMMIT");
+  io.to("user:"+req.params.id).emit("driver:balance", {balance:updated.rows[0].balance});
+  io.to("admins").emit("driver:balance",{driverId:req.params.id,balance:updated.rows[0].balance});
+  res.json({driver:updated.rows[0],transaction:tx.rows[0]});
+ }catch(error){await client.query("ROLLBACK");throw error;}finally{client.release();}
+}));
+app.get("/api/admin/drivers",auth,roles("admin"),wrap(async(req,res)=>{const r=await db.query("SELECT u.id,u.name,u.phone,u.car_model,u.plate_number,u.driver_license_number,u.approval_status,u.is_online,u.balance,l.lat,l.lng,l.updated_at FROM users u LEFT JOIN driver_locations l ON l.driver_id=u.id WHERE u.role='driver' ORDER BY CASE u.approval_status WHEN 'pending' THEN 0 WHEN 'approved' THEN 1 ELSE 2 END,u.created_at DESC");res.json({drivers:r.rows});}));
 app.patch("/api/admin/drivers/:id/approval",auth,roles("admin"),wrap(async(req,res)=>{const status=z.enum(["approved","rejected"]).parse(req.body.status);const r=await db.query("UPDATE users SET approval_status=$1,is_online=FALSE WHERE id=$2 AND role='driver' AND approval_status='pending' RETURNING id,name,phone,car_model,plate_number,driver_license_number,approval_status",[status,req.params.id]);if(!r.rowCount)return res.status(409).json({error:"Վարորդը չի գտնվել կամ արդեն որոշում կա"});io.emit("driver:approval",{driverId:r.rows[0].id,status});res.json({driver:r.rows[0]});}));
 
 app.get("/api/admin/orders",auth,roles("admin"),wrap(async(req,res)=>{
