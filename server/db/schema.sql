@@ -6,6 +6,9 @@ CREATE TABLE IF NOT EXISTS users (
  role VARCHAR(16) NOT NULL CHECK(role IN ('admin','driver','passenger')),
  car_model VARCHAR(80), plate_number VARCHAR(24),
  is_online BOOLEAN NOT NULL DEFAULT FALSE,
+ driver_rating NUMERIC(6,1) NOT NULL DEFAULT 50,
+ driver_rejection_count INTEGER NOT NULL DEFAULT 0,
+ driver_completion_count INTEGER NOT NULL DEFAULT 0,
  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE TABLE IF NOT EXISTS driver_locations (
@@ -42,6 +45,9 @@ CREATE INDEX IF NOT EXISTS orders_driver_created_idx ON orders(driver_id,created
 
 -- Driver onboarding and dispatcher approval
 ALTER TABLE users ADD COLUMN IF NOT EXISTS driver_license_number VARCHAR(32);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS driver_rating NUMERIC(6,1) NOT NULL DEFAULT 50;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS driver_rejection_count INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS driver_completion_count INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS approval_status VARCHAR(16) NOT NULL DEFAULT 'approved';
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='users_approval_status_check') THEN
