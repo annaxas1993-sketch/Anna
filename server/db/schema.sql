@@ -39,3 +39,13 @@ DO $$ BEGIN
     ALTER TABLE users ADD CONSTRAINT users_approval_status_check CHECK (approval_status IN ('pending','approved','rejected'));
   END IF;
 END $$;
+
+
+-- Sequential dispatcher offer queue
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS dispatch_enabled BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS dispatch_status VARCHAR(16) NOT NULL DEFAULT 'idle';
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS offered_driver_id UUID REFERENCES users(id) ON DELETE SET NULL;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS offer_expires_at TIMESTAMPTZ;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS tried_driver_ids UUID[] NOT NULL DEFAULT '{}';
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS dispatch_attempts INTEGER NOT NULL DEFAULT 0;
+CREATE INDEX IF NOT EXISTS orders_dispatch_queue_idx ON orders(dispatch_enabled,status,created_at) WHERE dispatch_enabled=TRUE;
