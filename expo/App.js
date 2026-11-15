@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState, useMemo } from "react";
-import { SafeAreaView, View, Text, StyleSheet, TouchableOpacity, StatusBar, ScrollView, Alert, Switch, BackHandler, TextInput, ActivityIndicator, AppState } from "react-native";
+import { SafeAreaView, View, Text, StyleSheet, TouchableOpacity, StatusBar, ScrollView, Alert, Switch, BackHandler, TextInput, ActivityIndicator, AppState, Linking } from "react-native";
 import { WebView } from "react-native-webview";
 import * as Location from "expo-location";
 
@@ -10,6 +10,23 @@ const TABS = [
   { id: "balance", icon: "₽", label: "Հաշվեկշիռ" },
   { id: "profile", icon: "●", label: "Պրոֆիլ" },
 ];
+
+
+function CustomerCallButton({ phone }) {
+  const canCall = typeof phone === "string" && phone.trim().length > 5;
+  const callCustomer = async () => {
+    if (!canCall) {
+      Alert.alert("Հաճախորդի հեռախոս", "Զանգի կոճակը կակտիվանա, երբ սերվերը պատվերի հետ ուղարկի հաճախորդի հեռախոսահամարը։");
+      return;
+    }
+    try {
+      await Linking.openURL("tel:" + phone.replace(/[^+0-9]/g, ""));
+    } catch (_) {
+      Alert.alert("Զանգի սխալ", "Չհաջողվեց բացել հեռախոսազանգը։");
+    }
+  };
+  return <TouchableOpacity disabled={!canCall} onPress={callCustomer} style={[styles.customerCallButton, !canCall && styles.customerCallButtonDisabled]}><Text style={styles.customerCallButtonText}>☎  ԶԱՆԳԵԼ ՀԱՃԱԽՈՐԴԻՆ</Text></TouchableOpacity>;
+}
 
 function Metric({ value, label }) {
   return <View style={styles.metric}><Text style={styles.metricValue}>{value}</Text><Text style={styles.metricLabel}>{label}</Text></View>;
@@ -142,7 +159,7 @@ setTimeout(()=>{map.invalidateSize();if(window.ReactNativeWebView)window.ReactNa
     if (!online) Alert.alert("Առցանց ռեժիմ", "Դիզայնի ցուցադրական ռեժիմ է․ իրական պատվերներ ստանալու համար պետք է միացնել սերվերը։");
   };
 
-  const renderOrders = () =><><Text style={styles.pageTitle}>Պատվերներ</Text><Text style={styles.pageSubtitle}>Նոր առաջարկներ և ընթացիկ ուղևորություններ</Text><View style={styles.emptyCard}><Text style={styles.emptyIcon}>▣</Text><Text style={styles.emptyTitle}>Դեռ պատվերներ չկան</Text><Text style={styles.emptyText}>Երբ սերվերը միացված լինի, այստեղ կհայտնվեն հասանելի պատվերները։</Text><TouchableOpacity style={styles.outlineButton} onPress={() => setTab("home")}><Text style={styles.outlineButtonText}>ԳԼԽԱՎՈՐ ԷՋ</Text></TouchableOpacity></View></>;
+  const renderOrders = () =><><Text style={styles.pageTitle}>Պատվերներ</Text><Text style={styles.pageSubtitle}>Նոր առաջարկներ և ընթացիկ ուղևորություններ</Text><View style={styles.emptyCard}><Text style={styles.emptyIcon}>▣</Text><Text style={styles.emptyTitle}>Դեռ պատվերներ չկան</Text><Text style={styles.emptyText}>Երբ սերվերը միացված լինի, այստեղ կհայտնվեն հասանելի պատվերները։ Յուրաքանչյուր պատվերի քարտում կլինի հաճախորդին զանգելու կոճակ։</Text><TouchableOpacity style={styles.outlineButton} onPress={() => setTab("home")}><Text style={styles.outlineButtonText}>ԳԼԽԱՎՈՐ ԷՋ</Text></TouchableOpacity></View></>;
   const renderTasks = () =><><Text style={styles.pageTitle}>Առաջադրանքներ</Text><Text style={styles.pageSubtitle}>Բոնուսներ և օրվա նպատակներ</Text><View style={styles.infoCard}><Text style={styles.infoTitle}>Օրվա նպատակ</Text><Text style={styles.infoText}>Առաջադրանքները և բոնուսները կցուցադրվեն այստեղ՝ սերվերի միացումից հետո։</Text><View style={styles.progressTrack}><View style={styles.progressFill}/></View><Text style={styles.mutedSmall}>0 / 10 ուղևորություն</Text></View><Row title="Շաբաթական բոնուս" detail="Առաջընթացը դեռ հասանելի չէ" icon="★"/><Row title="Ակտիվության միավորներ" detail="Կհաշվարկվեն ուղևորություններից" icon="↗"/></>;
   const renderBalance = () =><><Text style={styles.pageTitle}>Հաշվեկշիռ</Text><Text style={styles.pageSubtitle}>Եկամուտներ և վճարումների պատմություն</Text><View style={styles.balanceCard}><Text style={styles.balanceCaption}>ԸՆԴՀԱՆՈՒՐ ՀԱՇՎԵԿՇԻՌ</Text><Text style={styles.balanceValue}>0 ֏</Text><Text style={styles.balanceFoot}>Ցուցադրական տվյալներ</Text></View><View style={styles.sectionHeading}><Text style={styles.sectionTitle}>ԳՈՐԾԱՐՔՆԵՐ</Text></View><View style={styles.emptyCard}><Text style={styles.emptyTitle}>Գործարքներ դեռ չկան</Text><Text style={styles.emptyText}>Ուղևորությունների վճարումները կերևան այստեղ։</Text></View></>;
   const goBackProfile = () => setProfileSection("");
@@ -201,6 +218,7 @@ const styles = StyleSheet.create({
   emptyCard:{marginTop:12,backgroundColor:"#111C2C",borderRadius:18,padding:23,alignItems:"center",borderWidth:1,borderColor:"#233249"},emptyIcon:{fontSize:30,color:"#20D6A0",marginBottom:10},emptyTitle:{fontSize:15,color:"#F4F7FB",fontWeight:"800"},emptyText:{fontSize:11,color:"#8796AA",lineHeight:17,textAlign:"center",marginTop:7},outlineButton:{marginTop:17,borderWidth:1,borderColor:"#20D6A0",paddingHorizontal:18,paddingVertical:10,borderRadius:10},outlineButtonText:{color:"#20D6A0",fontSize:10,fontWeight:"900"},
   progressTrack:{height:7,backgroundColor:"#26364A",borderRadius:6,marginTop:17,overflow:"hidden"},progressFill:{width:"0%",height:7,backgroundColor:"#20D6A0"},mutedSmall:{color:"#8190A5",fontSize:10,marginTop:7},
   backButton:{alignSelf:"flex-start",paddingVertical:8,paddingHorizontal:12,backgroundColor:"#17263A",borderRadius:10,marginBottom:12},backButtonText:{color:"#20D6A0",fontSize:11,fontWeight:"900"},settingRow:{flexDirection:"row",alignItems:"center",backgroundColor:"#111C2C",padding:14,borderRadius:14,marginTop:9,borderWidth:1,borderColor:"#202F43"},row:{flexDirection:"row",alignItems:"center",backgroundColor:"#111C2C",padding:13,borderRadius:14,marginTop:9,borderWidth:1,borderColor:"#202F43"},rowIcon:{width:34,height:34,borderRadius:11,backgroundColor:"#1B2C40",alignItems:"center",justifyContent:"center",marginRight:11},rowIconText:{color:"#20D6A0",fontSize:16,fontWeight:"800"},rowTitle:{color:"#F0F4F9",fontSize:12,fontWeight:"800"},rowDetail:{color:"#8291A6",fontSize:10,marginTop:3},chevron:{color:"#71829A",fontSize:23,marginLeft:8},
+  customerCallButton:{marginTop:10,backgroundColor:"#20D6A0",paddingVertical:13,paddingHorizontal:16,borderRadius:12,alignItems:"center"},customerCallButtonDisabled:{opacity:.45},customerCallButtonText:{color:"#06251B",fontSize:11,fontWeight:"900",letterSpacing:.4},
   balanceCard:{backgroundColor:"#10372E",borderRadius:18,padding:20,borderWidth:1,borderColor:"#1A654F"},balanceCaption:{color:"#A2CDBF",fontSize:9,fontWeight:"900",letterSpacing:1.2},balanceValue:{color:"#FFFFFF",fontSize:32,fontWeight:"900",marginTop:8},balanceFoot:{color:"#A2CDBF",fontSize:10,marginTop:5},
   profileCard:{alignItems:"center",backgroundColor:"#121E2F",padding:20,borderRadius:18,borderWidth:1,borderColor:"#24344A",marginBottom:7},bigAvatar:{width:66,height:66,borderRadius:23,backgroundColor:"#1A3445",borderWidth:1,borderColor:"#20D6A0",alignItems:"center",justifyContent:"center"},bigAvatarText:{color:"#20D6A0",fontSize:29,fontWeight:"900"},profileName:{color:"#F5F8FC",fontSize:16,fontWeight:"900",marginTop:10},profileStatus:{color:"#8392A7",fontSize:10,marginTop:4},
   tabBar:{height:94,backgroundColor:"#080E19",borderTopWidth:1,borderTopColor:"#1C2A3E",flexDirection:"row",justifyContent:"space-around",alignItems:"center",paddingBottom:17},tabItem:{flex:1,alignItems:"center",justifyContent:"center",height:"100%",gap:5,transform:[{translateY:-10}]},tabCenter:{transform:[{translateY:-19}]},tabCenterIcon:{width:62,height:62,borderRadius:21,backgroundColor:"#20D6A0",alignItems:"center",justifyContent:"center",marginBottom:-1,elevation:10},tabIcon:{fontSize:28,color:"#718198"},tabLabel:{fontSize:11,color:"#718198",fontWeight:"800"},tabActive:{color:"#20D6A0"},tabIndicator:{position:"absolute",top:0,width:30,height:3,backgroundColor:"#20D6A0",borderRadius:2}
