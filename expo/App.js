@@ -159,6 +159,7 @@ setTimeout(()=>{map.invalidateSize();if(window.ReactNativeWebView)window.ReactNa
         const response = await fetch(API_BASE + "/api/me", { headers: { Authorization: "Bearer " + saved } });
         const data = await response.json().catch(() => ({}));
         if (!response.ok || data.user?.role !== "driver") { await AsyncStorage.removeItem("taxi_lider_driver_token"); return; }
+        try { await fetch(API_BASE + "/api/drivers/availability", { method: "PATCH", headers: { "Content-Type": "application/json", Authorization: "Bearer " + saved }, body: JSON.stringify({ online: false }) }); } catch (_) {}
         if (active) { setAuthToken(saved); setAuthUser(data.user); setOnline(false); }
       } catch (_) {}
       finally { if (active) setAuthReady(true); }
@@ -178,12 +179,17 @@ setTimeout(()=>{map.invalidateSize();if(window.ReactNativeWebView)window.ReactNa
     let active = true;
     const loadOrders = async () => {
       try {
-        const [available, mine] = await Promise.all([
+        const [available, mine, profile] = await Promise.all([
           fetch(API_BASE + "/api/orders/available", { headers: { Authorization: "Bearer " + authToken } }),
-          fetch(API_BASE + "/api/orders/mine", { headers: { Authorization: "Bearer " + authToken } })
+          fetch(API_BASE + "/api/orders/mine", { headers: { Authorization: "Bearer " + authToken } }),
+          fetch(API_BASE + "/api/me", { headers: { Authorization: "Bearer " + authToken } })
         ]);
-        const [a, m] = await Promise.all([available.json(), mine.json()]);
-        if (active) { if (available.ok) setAvailableOrders(a.orders || []); if (mine.ok) setMyOrders(m.orders || []); }
+        const [a, m, p] = await Promise.all([available.json(), mine.json(), profile.json()]);
+        if (active) {
+          if (available.ok) setAvailableOrders(a.orders || []);
+          if (mine.ok) setMyOrders(m.orders || []);
+          if (profile.ok && p.user?.approval_status !== authUser?.approval_status) setAuthUser(p.user);
+        }
       } catch (_) {}
     };
     loadOrders();
