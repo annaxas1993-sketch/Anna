@@ -4,7 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import {WebView} from 'react-native-webview';
 
 const KEY = 'taxi_lider_dispatcher_server_url';
-const DEFAULT_URL = 'http://127.0.0.1:3000/';
+const DEFAULT_URL = 'https://taxi-lider-api.onrender.com/';
 
 export default function App() {
   const [url, setUrl] = useState(DEFAULT_URL);
