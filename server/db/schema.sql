@@ -54,3 +54,17 @@ CREATE INDEX IF NOT EXISTS orders_dispatch_queue_idx ON orders(dispatch_enabled,
 ALTER TABLE orders ALTER COLUMN passenger_id DROP NOT NULL;
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS passenger_name VARCHAR(80);
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS passenger_phone VARCHAR(24);
+
+
+-- Driver wallet balance and immutable top-up ledger
+ALTER TABLE users ADD COLUMN IF NOT EXISTS balance NUMERIC(12,2) NOT NULL DEFAULT 0;
+CREATE TABLE IF NOT EXISTS driver_balance_transactions (
+ id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+ driver_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+ admin_id UUID NOT NULL REFERENCES users(id),
+ amount NUMERIC(12,2) NOT NULL CHECK(amount > 0),
+ note VARCHAR(240),
+ created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS driver_balance_transactions_driver_created_idx
+ ON driver_balance_transactions(driver_id,created_at DESC);
