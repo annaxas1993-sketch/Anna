@@ -7,6 +7,9 @@ import Constants from "expo-constants";
 
 const API_BASE = "https://taxi-lider-api.onrender.com";
 const DEFAULT_LOCATION = { latitude: 40.8128, longitude: 44.4883 };
+const TAXIMETER_BASE_FARE=400,TAXIMETER_INCLUDED_KM=2,TAXIMETER_EXTRA_KM_RATE=100;
+function distanceBetweenMeters(a,b){const rad=v=>v*Math.PI/180,dLat=rad(b.latitude-a.latitude),dLon=rad(b.longitude-a.longitude),x=Math.sin(dLat/2)**2+Math.cos(rad(a.latitude))*Math.cos(rad(b.latitude))*Math.sin(dLon/2)**2;return 6371000*2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x));}
+function calculateTaxiFare(meters){const km=Math.max(0,meters)/1000;return TAXIMETER_BASE_FARE+(km>TAXIMETER_INCLUDED_KM?Math.ceil(km-TAXIMETER_INCLUDED_KM)*TAXIMETER_EXTRA_KM_RATE:0);}
 const TABS = [
   { id: "home", icon: "⌂", label: "Գլխավոր" },
   { id: "orders", icon: "▣", label: "Պատվերներ" },
@@ -45,6 +48,9 @@ export default function App() {
   const [gpsReady, setGpsReady] = useState(false);
   const [mapReady, setMapReady] = useState(false);
   const [speedKmh, setSpeedKmh] = useState(0);
+  const [fareDistanceMeters,setFareDistanceMeters]=useState(0);
+  const [fareTripOrderId,setFareTripOrderId]=useState(null);
+  const fareDistanceRef=useRef(0),fareLastPositionRef=useRef(null),activeTripRef=useRef(null);
   const [profileSection, setProfileSection] = useState("");
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
@@ -163,6 +169,12 @@ setTimeout(()=>{map.invalidateSize();if(window.ReactNativeWebView)window.ReactNa
     const applyPosition = (position) => {
       if (!active || !position?.coords) return;
       const point = { latitude: position.coords.latitude, longitude: position.coords.longitude };
+      const activeTrip=activeTripRef.current,accuracy=Number(position.coords.accuracy);
+      if(activeTrip&&Number.isFinite(accuracy)&&accuracy<=35){
+        const previous=fareLastPositionRef.current;
+        if(previous){const segment=distanceBetweenMeters(previous,point);if(segment>=3&&segment<=120){fareDistanceRef.current+=segment;setFareDistanceMeters(fareDistanceRef.current);}}
+        fareLastPositionRef.current=point;
+      }
       setLocation(point);
       setGpsReady(true);
       setSpeedKmh(Math.max(0, Math.round((position.coords.speed || 0) * 3.6)));
@@ -198,6 +210,12 @@ setTimeout(()=>{map.invalidateSize();if(window.ReactNativeWebView)window.ReactNa
     });
     return () => { active = false; subscription?.remove(); };
   }, []);
+
+  useEffect(()=>{
+    const trip=(myOrders||[]).find(order=>order.status==="started");
+    if(!trip){activeTripRef.current=null;fareLastPositionRef.current=null;setFareTripOrderId(null);return;}
+    if(activeTripRef.current?.id!==trip.id){activeTripRef.current=trip;fareDistanceRef.current=0;fareLastPositionRef.current=null;setFareDistanceMeters(0);setFareTripOrderId(trip.id);}
+  },[myOrders]);
 
   // Restore the authenticated driver session after app restart.
   useEffect(() => {
@@ -325,8 +343,12 @@ setTimeout(()=>{map.invalidateSize();if(window.ReactNativeWebView)window.ReactNa
   };
 
   const updateOrderStatus = async (id, status) => {
-    try { await apiRequest("/api/orders/" + id + "/status", { method: "POST", body: JSON.stringify({ status }) }); const data = await apiRequest("/api/orders/mine"); setMyOrders(data.orders || []); }
-    catch (e) { Alert.alert("Պատվերի սխալ", e.message); }
+    try {
+      if(status==="started"){fareDistanceRef.current=0;fareLastPositionRef.current=null;setFareDistanceMeters(0);setFareTripOrderId(id);activeTripRef.current={id,status};}
+      await apiRequest("/api/orders/"+id+"/status",{method:"POST",body:JSON.stringify({status})});
+      const data=await apiRequest("/api/orders/mine");setMyOrders(data.orders||[]);
+      if(status==="completed"){const meters=fareDistanceRef.current;Alert.alert("Ուղևորությունն ավարտված է","Անցած ճանապարհ՝ "+(meters/1000).toFixed(2)+" կմ\\nՈւղեվարձ՝ "+calculateTaxiFare(meters).toLocaleString("hy-AM")+" ֏");activeTripRef.current=null;fareLastPositionRef.current=null;setFareTripOrderId(null);}
+    }catch(e){Alert.alert("Պատվերի սխալ",e.message);}
   };
 
   const renderOrders = () => (
@@ -367,7 +389,7 @@ setTimeout(()=>{map.invalidateSize();if(window.ReactNativeWebView)window.ReactNa
               <CustomerCallButton phone={o.passenger_phone} />
               {o.status === "accepted" ? <TouchableOpacity style={styles.outlineButton} onPress={() => updateOrderStatus(o.id, "arrived")}><Text style={styles.outlineButtonText}>ԺԱՄԱՆԵԼ ԵՄ</Text></TouchableOpacity> : null}
               {o.status === "arrived" ? <TouchableOpacity style={styles.outlineButton} onPress={() => updateOrderStatus(o.id, "started")}><Text style={styles.outlineButtonText}>ՍԿՍԵԼ ՈՒՂԵՎՈՐՈՒԹՅՈՒՆԸ</Text></TouchableOpacity> : null}
-              {o.status === "started" ? <TouchableOpacity style={styles.outlineButton} onPress={() => updateOrderStatus(o.id, "completed")}><Text style={styles.outlineButtonText}>ԱՎԱՐՏԵԼ ՊԱՏՎԵՐԸ</Text></TouchableOpacity> : null}
+              {o.status === "started" ? <><View style={styles.taximeterCard}><Text style={styles.taximeterTitle}>ՏԱՔՍՈՄԵՏՐ</Text><Text style={styles.taximeterFare}>{calculateTaxiFare(fareTripOrderId===o.id?fareDistanceMeters:0).toLocaleString("hy-AM")} ֏</Text><Text style={styles.taximeterInfo}>Ճանապարհ՝ {((fareTripOrderId===o.id?fareDistanceMeters:0)/1000).toFixed(2)} կմ · առաջին 2 կմ՝ 400 ֏, հետո՝ 100 ֏/կմ</Text></View><TouchableOpacity style={styles.outlineButton} onPress={() => updateOrderStatus(o.id, "completed")}><Text style={styles.outlineButtonText}>ԱՎԱՐՏԵԼ ՊԱՏՎԵՐԸ</Text></TouchableOpacity></> : null}
             </View>
           ))}
           {!availableOrders.length && !myOrders.some(o => ["accepted", "arrived", "started"].includes(o.status)) ? (
@@ -441,7 +463,7 @@ setTimeout(()=>{map.invalidateSize();if(window.ReactNativeWebView)window.ReactNa
 
   const screens = {orders:renderOrders, tasks:renderTasks, balance:renderBalance, profile:renderProfile};
   return <SafeAreaView style={styles.safe}><StatusBar barStyle="light-content" backgroundColor="#080E19"/>
-    {tab === "home" ? <View style={styles.fullMap}><WebView ref={mapRef} style={StyleSheet.absoluteFillObject} source={{ html: mapHtml, baseUrl: "https://localhost" }} originWhitelist={["*"]} javaScriptEnabled domStorageEnabled mixedContentMode="always" setSupportMultipleWindows={false} cacheEnabled onMessage={(event) => { if (event.nativeEvent.data === "MAP_READY") setMapReady(true); }} /><View style={styles.mapTopOverlay}><View style={styles.mapStyleSwitch}><TouchableOpacity onPress={() => mapRef.current?.injectJavaScript("window.axasMapStyle && window.axasMapStyle(\u0027satellite\u0027); true;")} style={styles.mapStyleButton}><Text style={styles.mapStyleText}>ԱՐԲԱՆՅԱԿԱՅԻՆ</Text></TouchableOpacity><TouchableOpacity onPress={() => mapRef.current?.injectJavaScript("window.axasMapStyle && window.axasMapStyle(\u0027light\u0027); true;")} style={styles.mapStyleButton}><Text style={styles.mapStyleText}>ՍՈՎՈՐԱԿԱՆ</Text></TouchableOpacity></View><TouchableOpacity onPress={toggleOnline} style={[styles.mapOnlineButton, online && styles.mapOnlineButtonOn]}><View style={[styles.tinyDot, online && styles.statusDotOn]}/><Text style={styles.mapOnlineText}>{online ? "ԱՌՑԱՆՑ" : "ԱՆՑԱՆՑ"}</Text></TouchableOpacity></View><View style={styles.driverWalletBadge}><Text style={styles.driverWalletLabel}>ԻՄ ՀԱՇՎԵԿՇԻՌԸ</Text><Text style={styles.driverWalletValue}>{Number(driverBalance||0).toLocaleString("hy-AM")} ֏</Text></View><View style={styles.speedBadge}><Text style={styles.speedValue}>{speedKmh}</Text><Text style={styles.speedUnit}>կմ/ժ</Text></View><View style={styles.mapAttribution}><Text style={styles.mapAttributionText}>© OpenStreetMap contributors © CARTO</Text></View><View style={styles.mapControlsFull}><TouchableOpacity style={styles.mapControl} onPress={() => zoomMap(0.55)}><Text style={styles.mapControlText}>+</Text></TouchableOpacity><TouchableOpacity style={styles.mapControl} onPress={() => zoomMap(1.8)}><Text style={styles.mapControlText}>−</Text></TouchableOpacity><TouchableOpacity style={styles.mapControl} onPress={() => mapRef.current?.injectJavaScript("window.axasLocate && window.axasLocate(); true;")}><Text style={styles.mapControlText}>◎</Text></TouchableOpacity></View></View> : <><View style={styles.topBar}><Text style={styles.brand}>TAXI <Text style={styles.brandAccent}>LIDER</Text></Text><View style={[styles.topStatus, online && styles.topStatusOn]}><View style={[styles.tinyDot, online && styles.statusDotOn]}/><Text style={styles.topStatusText}>{online ? "Առցանց" : "Անցանց"}</Text></View></View><ScrollView style={styles.scroll} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>{screens[tab]()}</ScrollView></>}
+    {tab === "home" ? <View style={styles.fullMap}><WebView ref={mapRef} style={StyleSheet.absoluteFillObject} source={{ html: mapHtml, baseUrl: "https://localhost" }} originWhitelist={["*"]} javaScriptEnabled domStorageEnabled mixedContentMode="always" setSupportMultipleWindows={false} cacheEnabled onMessage={(event) => { if (event.nativeEvent.data === "MAP_READY") setMapReady(true); }} /><View style={styles.mapTopOverlay}><View style={styles.mapStyleSwitch}><TouchableOpacity onPress={() => mapRef.current?.injectJavaScript("window.axasMapStyle && window.axasMapStyle(\u0027satellite\u0027); true;")} style={styles.mapStyleButton}><Text style={styles.mapStyleText}>ԱՐԲԱՆՅԱԿԱՅԻՆ</Text></TouchableOpacity><TouchableOpacity onPress={() => mapRef.current?.injectJavaScript("window.axasMapStyle && window.axasMapStyle(\u0027light\u0027); true;")} style={styles.mapStyleButton}><Text style={styles.mapStyleText}>ՍՈՎՈՐԱԿԱՆ</Text></TouchableOpacity></View><TouchableOpacity onPress={toggleOnline} style={[styles.mapOnlineButton, online && styles.mapOnlineButtonOn]}><View style={[styles.tinyDot, online && styles.statusDotOn]}/><Text style={styles.mapOnlineText}>{online ? "ԱՌՑԱՆՑ" : "ԱՆՑԱՆՑ"}</Text></TouchableOpacity></View>{fareTripOrderId ? <View style={styles.mapTaximeterBadge}><Text style={styles.mapTaximeterLabel}>ՏԱՔՍՈՄԵՏՐ</Text><Text style={styles.mapTaximeterFare}>{calculateTaxiFare(fareDistanceMeters).toLocaleString("hy-AM")} ֏</Text><Text style={styles.mapTaximeterKm}>{(fareDistanceMeters/1000).toFixed(2)} կմ</Text></View> : null}<View style={styles.driverWalletBadge}><Text style={styles.driverWalletLabel}>ԻՄ ՀԱՇՎԵԿՇԻՌԸ</Text><Text style={styles.driverWalletValue}>{Number(driverBalance||0).toLocaleString("hy-AM")} ֏</Text></View><View style={styles.speedBadge}><Text style={styles.speedValue}>{speedKmh}</Text><Text style={styles.speedUnit}>կմ/ժ</Text></View><View style={styles.mapAttribution}><Text style={styles.mapAttributionText}>© OpenStreetMap contributors © CARTO</Text></View><View style={styles.mapControlsFull}><TouchableOpacity style={styles.mapControl} onPress={() => zoomMap(0.55)}><Text style={styles.mapControlText}>+</Text></TouchableOpacity><TouchableOpacity style={styles.mapControl} onPress={() => zoomMap(1.8)}><Text style={styles.mapControlText}>−</Text></TouchableOpacity><TouchableOpacity style={styles.mapControl} onPress={() => mapRef.current?.injectJavaScript("window.axasLocate && window.axasLocate(); true;")}><Text style={styles.mapControlText}>◎</Text></TouchableOpacity></View></View> : <><View style={styles.topBar}><Text style={styles.brand}>TAXI <Text style={styles.brandAccent}>LIDER</Text></Text><View style={[styles.topStatus, online && styles.topStatusOn]}><View style={[styles.tinyDot, online && styles.statusDotOn]}/><Text style={styles.topStatusText}>{online ? "Առցանց" : "Անցանց"}</Text></View></View><ScrollView style={styles.scroll} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>{screens[tab]()}</ScrollView></>}
     <View style={styles.tabBar}>{TABS.map(item =><TouchableOpacity key={item.id} style={[styles.tabItem, item.id==="tasks" && styles.tabCenter]} onPress={() => setTab(item.id)}>{item.id==="tasks" ? <View style={styles.tabCenterIcon}><Text style={{fontSize:22,color:"#061810",fontWeight:"900"}}>{item.icon}</Text></View> : <Text style={[styles.tabIcon, tab===item.id && styles.tabActive]}>{item.icon}</Text>}<Text style={[styles.tabLabel, tab===item.id && styles.tabActive]}>{item.label}</Text>{tab===item.id && <View style={styles.tabIndicator}/>}</TouchableOpacity>)}</View></SafeAreaView>;
 }
 
@@ -457,6 +479,8 @@ const styles = StyleSheet.create({
   mapOnlineButton:{flexDirection:"row",alignItems:"center",gap:7,backgroundColor:"#101D2DEB",paddingHorizontal:14,paddingVertical:12,borderRadius:13,borderWidth:1,borderColor:"#39485C"},
   mapOnlineButtonOn:{backgroundColor:"#10372E",borderColor:"#20D6A0"},
   mapOnlineText:{color:"#FFFFFF",fontSize:10,fontWeight:"900",letterSpacing:.8},
+  mapTaximeterBadge:{position:"absolute",top:78,left:12,backgroundColor:"#091321F2",borderWidth:1,borderColor:"#20D6A0",borderRadius:14,paddingHorizontal:14,paddingVertical:9,minWidth:126,elevation:8},mapTaximeterLabel:{color:"#A7B7C9",fontSize:9,fontWeight:"900"},mapTaximeterFare:{color:"#20D6A0",fontSize:22,fontWeight:"900",marginTop:2},mapTaximeterKm:{color:"#FFFFFF",fontSize:10,marginTop:1},
+  taximeterCard:{marginTop:10,backgroundColor:"#0B2924",borderColor:"#20D6A0",borderWidth:1,borderRadius:12,padding:13},taximeterTitle:{color:"#A7B7C9",fontSize:10,fontWeight:"900",letterSpacing:1},taximeterFare:{color:"#20D6A0",fontSize:27,fontWeight:"900",marginTop:4},taximeterInfo:{color:"#D5E3E0",fontSize:11,marginTop:4},
   driverWalletBadge:{position:"absolute",top:78,right:12,backgroundColor:"#091321F2",borderWidth:1,borderColor:"#20D6A0",borderRadius:14,paddingHorizontal:14,paddingVertical:9,minWidth:132,alignItems:"flex-end",elevation:8,shadowColor:"#000",shadowOpacity:.25,shadowRadius:8,shadowOffset:{width:0,height:3}},driverWalletLabel:{color:"#A7B7C9",fontSize:9,fontWeight:"900",letterSpacing:.6},driverWalletValue:{color:"#20D6A0",fontSize:21,fontWeight:"900",marginTop:2},
   speedBadge:{position:"absolute",left:12,bottom:16,flexDirection:"row",alignItems:"baseline",gap:5,backgroundColor:"#FFFFFFF2",paddingHorizontal:15,paddingVertical:10,borderRadius:15,borderWidth:1,borderColor:"#D9E2EA",elevation:7,shadowColor:"#000",shadowOpacity:.15,shadowRadius:8,shadowOffset:{width:0,height:3}},speedValue:{fontSize:25,fontWeight:"900",color:"#142536"},speedUnit:{fontSize:11,fontWeight:"800",color:"#536477"},mapAttribution:{position:"absolute",left:9,bottom:8,backgroundColor:"#FFFFFFD9",paddingHorizontal:7,paddingVertical:4,borderRadius:5},
   mapAttributionText:{color:"#526273",fontSize:8},
