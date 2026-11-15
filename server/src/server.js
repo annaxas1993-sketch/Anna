@@ -100,7 +100,7 @@ app.get("/api/admin/drivers",auth,roles("admin"),wrap(async(req,res)=>{const r=a
 app.patch("/api/admin/drivers/:id/approval",auth,roles("admin"),wrap(async(req,res)=>{const status=z.enum(["approved","rejected"]).parse(req.body.status);const r=await db.query("UPDATE users SET approval_status=$1,is_online=FALSE WHERE id=$2 AND role='driver' AND approval_status='pending' RETURNING id,name,phone,car_model,plate_number,driver_license_number,approval_status",[status,req.params.id]);if(!r.rowCount)return res.status(409).json({error:"Վարորդը չի գտնվել կամ արդեն որոշում կա"});io.emit("driver:approval",{driverId:r.rows[0].id,status});res.json({driver:r.rows[0]});}));
 
 app.get("/api/admin/orders",auth,roles("admin"),wrap(async(req,res)=>{
- const r=await db.query("SELECT o.*,p.name AS passenger_name,p.phone AS passenger_phone,d.name AS driver_name,d.phone AS driver_phone FROM orders o JOIN users p ON p.id=o.passenger_id LEFT JOIN users d ON d.id=o.driver_id ORDER BY o.created_at DESC LIMIT 200");
+ const r=await db.query("SELECT o.*,p.name AS passenger_name,p.phone AS passenger_phone,d.name AS driver_name,d.phone AS driver_phone,offered.name AS offered_driver_name FROM orders o JOIN users p ON p.id=o.passenger_id LEFT JOIN users d ON d.id=o.driver_id LEFT JOIN users offered ON offered.id=o.offered_driver_id ORDER BY o.created_at DESC LIMIT 200");
  res.json({orders:r.rows});
 }));
 app.post("/api/admin/orders/:id/dispatch",auth,roles("admin"),wrap(async(req,res)=>{
