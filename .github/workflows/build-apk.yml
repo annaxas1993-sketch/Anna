@@ -21,6 +21,10 @@ jobs:
           node-version: 22
       - name: Install dependencies
         run: npm install
+      - name: Generate TAXI LIDER app logo
+        run: |
+          python -m pip install --quiet pillow
+          python assets/generate_icon.py
       - name: Generate native Android project
         run: npx expo prebuild --platform android --non-interactive
       - uses: actions/setup-java@v4
