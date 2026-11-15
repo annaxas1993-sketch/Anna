@@ -43,4 +43,10 @@ app.get("/api/admin/drivers",auth,roles("admin"),wrap(async(req,res)=>{const r=a
 io.use((s,next)=>{try{s.user=require("jsonwebtoken").verify(s.handshake.auth?.token,process.env.JWT_SECRET);next();}catch{next(new Error("unauthorized"));}});
 io.on("connection",s=>{if(s.user.role==="driver")s.join("drivers");if(s.user.role==="admin")s.join("admins");s.join("user:"+s.user.sub);});
 app.use((err,req,res,next)=>{if(err instanceof z.ZodError)return res.status(400).json({error:"Տվյալները սխալ են",details:err.issues});if(err.code==="23505")return res.status(409).json({error:"Այս հեռախոսահամարն արդեն գրանցված է"});console.error(err);res.status(500).json({error:"Սերվերի ներքին սխալ"});});
-server.listen(Number(process.env.PORT||3000),()=>console.log("AXAS Driver API listening"));
+async function start(){
+ const fs=require("fs"),path=require("path");
+ const schema=fs.readFileSync(path.join(__dirname,"../db/schema.sql"),"utf8");
+ await db.query(schema);
+ server.listen(Number(process.env.PORT||3000),"0.0.0.0",()=>console.log("TAXI LIDER API listening"));
+}
+start().catch(error=>{console.error("Database initialization failed",error);process.exit(1);});
