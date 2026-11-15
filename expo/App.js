@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState, useMemo } from "react";
-import { SafeAreaView, View, Text, StyleSheet, TouchableOpacity, StatusBar, ScrollView, Alert, Switch, BackHandler, TextInput, ActivityIndicator } from "react-native";
+import { SafeAreaView, View, Text, StyleSheet, TouchableOpacity, StatusBar, ScrollView, Alert, Switch, BackHandler, TextInput, ActivityIndicator, AppState } from "react-native";
 import { WebView } from "react-native-webview";
 import * as Location from "expo-location";
 
@@ -102,6 +102,27 @@ setTimeout(()=>map.invalidateSize(),500);</script></body></html>`, []);
       if (active) Alert.alert("GPS-ի սխալ", "Չհաջողվեց ստանալ տեղադրությունը։ Միացրու հեռախոսի GPS-ը և փորձիր կրկին։");
     });
     return () => { active = false; subscription?.remove(); };
+  }, []);
+
+  // Refresh GPS whenever the driver returns to the app from background.
+  useEffect(() => {
+    const subscription = AppState.addEventListener("change", async (state) => {
+      if (state !== "active") return;
+      try {
+        const permission = await Location.getForegroundPermissionsAsync();
+        if (permission.status !== "granted") return;
+        const current = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.High,
+          mayShowUserSettingsDialog: true
+        });
+        if (!current?.coords) return;
+        const point = { latitude: current.coords.latitude, longitude: current.coords.longitude };
+        setLocation(point);
+        setGpsReady(true);
+        setSpeedKmh(Math.max(0, Math.round((current.coords.speed || 0) * 3.6)));
+      } catch (_) {}
+    });
+    return () => subscription.remove();
   }, []);
 
   // Do not send GPS coordinates until the map's JavaScript has finished loading.
