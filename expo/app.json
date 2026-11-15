@@ -12,7 +12,11 @@
         "ACCESS_COARSE_LOCATION",
         "ACCESS_FINE_LOCATION"
       ],
-      "label": "TAXI LIDER"
+      "label": "TAXI LIDER",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-foreground.png",
+        "backgroundColor": "#081321"
+      }
     },
     "ios": {
       "supportsTablet": false
@@ -24,6 +28,7 @@
           "locationWhenInUsePermission": "TAXI LIDER-ը օգտագործում է տեղադրությունը՝ վարորդի դիրքը քարտեզում ցույց տալու համար։"
         }
       ]
-    ]
+    ],
+    "icon": "./assets/icon.png"
   }
 }
