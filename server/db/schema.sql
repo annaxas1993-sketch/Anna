@@ -68,3 +68,13 @@ CREATE TABLE IF NOT EXISTS driver_balance_transactions (
 );
 CREATE INDEX IF NOT EXISTS driver_balance_transactions_driver_created_idx
  ON driver_balance_transactions(driver_id,created_at DESC);
+
+
+-- Dispatcher-controlled order priority: urgent orders dispatch first
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS priority VARCHAR(12) NOT NULL DEFAULT 'normal';
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='orders_priority_check') THEN
+    ALTER TABLE orders ADD CONSTRAINT orders_priority_check CHECK (priority IN ('normal','urgent'));
+  END IF;
+END $$;
+CREATE INDEX IF NOT EXISTS orders_priority_dispatch_idx ON orders(priority,created_at) WHERE status='searching' AND dispatch_enabled=TRUE;
