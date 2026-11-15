@@ -2,7 +2,9 @@ import React, { useEffect, useRef, useState, useMemo } from "react";
 import { SafeAreaView, View, Text, StyleSheet, TouchableOpacity, StatusBar, ScrollView, Alert, Switch, BackHandler, TextInput, ActivityIndicator, AppState, Linking } from "react-native";
 import { WebView } from "react-native-webview";
 import * as Location from "expo-location";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
+const API_BASE = "https://taxi-lider-api.onrender.com";
 const DEFAULT_LOCATION = { latitude: 40.8128, longitude: 44.4883 };
 const TABS = [
   { id: "home", icon: "⌂", label: "Գլխավոր" },
@@ -59,8 +61,22 @@ export default function App() {
   const [driverRegLicense,setDriverRegLicense]=useState("");
   const [driverRegMessage,setDriverRegMessage]=useState("");
   const [driverRegBusy,setDriverRegBusy]=useState(false);
+  const [authToken,setAuthToken]=useState(null);
+  const [authUser,setAuthUser]=useState(null);
+  const [authReady,setAuthReady]=useState(false);
+  const [authPhone,setAuthPhone]=useState("");
+  const [authPassword,setAuthPassword]=useState("");
+  const [authBusy,setAuthBusy]=useState(false);
+  const [availableOrders,setAvailableOrders]=useState([]);
+  const [myOrders,setMyOrders]=useState([]);
   const mapRef = useRef(null);
   const destination = { latitude: location.latitude + 0.0065, longitude: location.longitude + 0.0075 };
+  const apiRequest = async (path, options = {}) => {
+    const response = await fetch(API_BASE + path, { ...options, headers: { "Content-Type": "application/json", ...(authToken ? { Authorization: "Bearer " + authToken } : {}), ...(options.headers || {}) } });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || "Սերվերի հետ կապը չհաջողվեց");
+    return data;
+  };
   const zoomMap = (factor) => mapRef.current?.injectJavaScript(`window.axasZoom && window.axasZoom(${factor}); true;`);
   const searchAddress = async () => {
     const query = addressQuery.trim();
@@ -133,6 +149,48 @@ setTimeout(()=>{map.invalidateSize();if(window.ReactNativeWebView)window.ReactNa
     return () => { active = false; subscription?.remove(); };
   }, []);
 
+  // Restore the authenticated driver session after app restart.
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        const saved = await AsyncStorage.getItem("taxi_lider_driver_token");
+        if (!saved) return;
+        const response = await fetch(API_BASE + "/api/me", { headers: { Authorization: "Bearer " + saved } });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok || data.user?.role !== "driver") { await AsyncStorage.removeItem("taxi_lider_driver_token"); return; }
+        if (active) { setAuthToken(saved); setAuthUser(data.user); setOnline(false); }
+      } catch (_) {}
+      finally { if (active) setAuthReady(true); }
+    })();
+    return () => { active = false; };
+  }, []);
+
+  // Publish GPS only for an approved driver who has switched to online.
+  useEffect(() => {
+    if (!authToken || authUser?.role !== "driver" || authUser?.approval_status !== "approved" || !online || !gpsReady) return;
+    fetch(API_BASE + "/api/drivers/location", { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + authToken }, body: JSON.stringify({ lat: location.latitude, lng: location.longitude }) }).catch(() => {});
+  }, [authToken, authUser, online, gpsReady, location.latitude, location.longitude]);
+
+  // Refresh available and assigned orders while an approved driver is online.
+  useEffect(() => {
+    if (!authToken || authUser?.role !== "driver" || authUser?.approval_status !== "approved") return;
+    let active = true;
+    const loadOrders = async () => {
+      try {
+        const [available, mine] = await Promise.all([
+          fetch(API_BASE + "/api/orders/available", { headers: { Authorization: "Bearer " + authToken } }),
+          fetch(API_BASE + "/api/orders/mine", { headers: { Authorization: "Bearer " + authToken } })
+        ]);
+        const [a, m] = await Promise.all([available.json(), mine.json()]);
+        if (active) { if (available.ok) setAvailableOrders(a.orders || []); if (mine.ok) setMyOrders(m.orders || []); }
+      } catch (_) {}
+    };
+    loadOrders();
+    const timer = setInterval(loadOrders, 8000);
+    return () => { active = false; clearInterval(timer); };
+  }, [authToken, authUser]);
+
   // Refresh GPS whenever the driver returns to the app from background.
   useEffect(() => {
     const subscription = AppState.addEventListener("change", async (state) => {
@@ -162,12 +220,47 @@ setTimeout(()=>{map.invalidateSize();if(window.ReactNativeWebView)window.ReactNa
     );
   }, [mapReady, gpsReady, location.latitude, location.longitude]);
 
-  const toggleOnline = () => {
-    setOnline(v => !v);
-    if (!online) Alert.alert("Առցանց ռեժիմ", "Դիզայնի ցուցադրական ռեժիմ է․ իրական պատվերներ ստանալու համար պետք է միացնել սերվերը։");
+  const toggleOnline = async () => {
+    if (!authToken || !authUser) { setTab("profile"); setProfileSection("login"); Alert.alert("Մուտք գործիր", "Առցանց դառնալու համար նախ մուտք գործիր վարորդի հաշվով։"); return; }
+    if (authUser.approval_status !== "approved") { Alert.alert("Հաշիվը հաստատված չէ", authUser.approval_status === "rejected" ? "Գրանցումը մերժվել է։ Կապվիր դիսպետչերի հետ։" : "Դիսպետչերը դեռ պետք է հաստատի քո վարորդի հաշիվը։"); return; }
+    try {
+      const next = !online;
+      await apiRequest("/api/drivers/availability", { method: "PATCH", body: JSON.stringify({ online: next }) });
+      setOnline(next);
+      if (next && !gpsReady) Alert.alert("GPS", "Միացրու հեռախոսի տեղադրությունը, որպեսզի դիսպետչերը տեսնի մեքենայի դիրքը։");
+    } catch (e) { Alert.alert("Կապի սխալ", e.message); }
   };
 
-  const renderOrders = () =><><Text style={styles.pageTitle}>Պատվերներ</Text><Text style={styles.pageSubtitle}>Նոր առաջարկներ և ընթացիկ ուղևորություններ</Text><View style={styles.emptyCard}><Text style={styles.emptyIcon}>▣</Text><Text style={styles.emptyTitle}>Դեռ պատվերներ չկան</Text><Text style={styles.emptyText}>Երբ սերվերը միացված լինի, այստեղ կհայտնվեն հասանելի պատվերները։ Յուրաքանչյուր պատվերի քարտում կլինի հաճախորդին զանգելու կոճակ։</Text><CustomerCallButton phone={null}/><TouchableOpacity style={styles.outlineButton} onPress={() => setTab("home")}><Text style={styles.outlineButtonText}>ԳԼԽԱՎՈՐ ԷՋ</Text></TouchableOpacity></View></>;
+  const loginDriver = async () => {
+    if (!authPhone.trim() || !authPassword) { Alert.alert("Մուտք", "Լրացրու հեռախոսահամարը և գաղտնաբառը։"); return; }
+    setAuthBusy(true);
+    try {
+      const data = await apiRequest("/api/auth/login", { method: "POST", body: JSON.stringify({ phone: authPhone.trim(), password: authPassword }) });
+      if (data.user?.role !== "driver") throw new Error("Այս հաշիվը վարորդի հաշիվ չէ։ Գրանցվիր որպես վարորդ։");
+      await AsyncStorage.setItem("taxi_lider_driver_token", data.token);
+      setAuthToken(data.token); setAuthUser(data.user); setAuthPassword(""); setOnline(false); setProfileSection("");
+      Alert.alert("Մուտքը հաջող է", data.user.approval_status === "approved" ? "Քո վարորդի հաշիվը հաստատված է։ Կարող ես անցնել առցանց։" : "Հաշիվը սպասում է դիսպետչերի հաստատմանը։");
+    } catch (e) { Alert.alert("Մուտքի սխալ", e.message); }
+    finally { setAuthBusy(false); }
+  };
+
+  const logoutDriver = async () => {
+    try { if (authToken && online) await apiRequest("/api/drivers/availability", { method: "PATCH", body: JSON.stringify({ online: false }) }); } catch (_) {}
+    await AsyncStorage.removeItem("taxi_lider_driver_token");
+    setAuthToken(null); setAuthUser(null); setOnline(false); setAvailableOrders([]); setMyOrders([]); setProfileSection("");
+  };
+
+  const acceptOrder = async (id) => {
+    try { await apiRequest("/api/orders/" + id + "/accept", { method: "POST" }); const data = await apiRequest("/api/orders/mine"); setMyOrders(data.orders || []); setAvailableOrders(list => list.filter(o => o.id !== id)); Alert.alert("Պատվերն ընդունված է", "Պատվերը ավելացվել է քո ընթացիկ ուղևորություններին։"); }
+    catch (e) { Alert.alert("Պատվերի սխալ", e.message); }
+  };
+
+  const updateOrderStatus = async (id, status) => {
+    try { await apiRequest("/api/orders/" + id + "/status", { method: "POST", body: JSON.stringify({ status }) }); const data = await apiRequest("/api/orders/mine"); setMyOrders(data.orders || []); }
+    catch (e) { Alert.alert("Պատվերի սխալ", e.message); }
+  };
+
+  const renderOrders = () => <><Text style={styles.pageTitle}>Պատվերներ</Text><Text style={styles.pageSubtitle}>Նոր առաջարկներ և ընթացիկ ուղևորություններ</Text>{!authUser ? <View style={styles.emptyCard}><Text style={styles.emptyTitle}>Մուտք գործիր վարորդի հաշվով</Text><TouchableOpacity style={styles.outlineButton} onPress={()=>{setTab("profile");setProfileSection("login")}}><Text style={styles.outlineButtonText}>ՄՈՒՏՔ ԳՈՐԾԵԼ</Text></TouchableOpacity></View> : authUser.approval_status !== "approved" ? <View style={styles.infoCard}><Text style={styles.infoTitle}>Սպասում է հաստատման</Text><Text style={styles.infoText}>Դիսպետչերը պետք է հաստատի քո հաշիվը, մինչև պատվերներ ստանալը։</Text></View> : <><Text style={styles.sectionTitle}>ՆՈՐ ՊԱՏՎԵՐՆԵՐ ({availableOrders.length})</Text>{availableOrders.map(o=><View key={o.id} style={[styles.infoCard,{marginTop:10}]}><Text style={styles.infoTitle}>Վերցնել՝ {o.pickup_address}</Text><Text style={styles.infoText}>Ուղղություն՝ {o.destination_address}</Text><Text style={styles.infoText}>Ուղևոր՝ {o.passenger_name||"Հաճախորդ"}</Text><TouchableOpacity onPress={()=>acceptOrder(o.id)} style={[styles.outlineButton,{backgroundColor:"#20D6A0"}]}><Text style={[styles.outlineButtonText,{color:"#06251B"}]}>ԸՆԴՈՒՆԵԼ ՊԱՏՎԵՐԸ</Text></TouchableOpacity></View>)}<Text style={[styles.sectionTitle,{marginTop:20}]}>ԻՄ ԸՆԹԱՑԻԿ ՊԱՏՎԵՐՆԵՐԸ</Text>{myOrders.filter(o=>["accepted","arrived","started"].includes(o.status)).map(o=><View key={o.id} style={[styles.infoCard,{marginTop:10}]}><Text style={styles.infoTitle}>Ուղղություն՝ {o.destination_address}</Text><Text style={styles.infoText}>Վերցնել՝ {o.pickup_address}</Text><Text style={styles.infoText}>Ուղևոր՝ {o.passenger_name||"Հաճախորդ"} · {o.passenger_phone||""}</Text><CustomerCallButton phone={o.passenger_phone}/>{o.status==="accepted"?<TouchableOpacity style={styles.outlineButton} onPress={()=>updateOrderStatus(o.id,"arrived")}><Text style={styles.outlineButtonText}>ԺԱՄԱՆԵԼ ԵՄ</Text></TouchableOpacity>:null}{o.status==="arrived"?<TouchableOpacity style={styles.outlineButton} onPress={()=>updateOrderStatus(o.id,"started")}><Text style={styles.outlineButtonText}>ՍԿՍԵԼ ՈՒՂԵՎՈՐՈՒԹՅՈՒՆԸ</Text></TouchableOpacity>:null}{o.status==="started"?<TouchableOpacity style={styles.outlineButton} onPress={()=>updateOrderStatus(o.id,"completed")}><Text style={styles.outlineButtonText}>ԱՎԱՐՏԵԼ ՊԱՏՎԵՐԸ</Text></TouchableOpacity>:null}</View>)}{!availableOrders.length&&!myOrders.some(o=>["accepted","arrived","started"].includes(o.status))?<View style={styles.emptyCard}><Text style={styles.emptyTitle}>Այս պահին պատվերներ չկան</Text><Text style={styles.emptyText}>Նոր պատվերները ինքնաբերաբար կթարմացվեն։</Text></View>:null}</>};
   const renderTasks = () =><><Text style={styles.pageTitle}>Առաջադրանքներ</Text><Text style={styles.pageSubtitle}>Բոնուսներ և օրվա նպատակներ</Text><View style={styles.infoCard}><Text style={styles.infoTitle}>Օրվա նպատակ</Text><Text style={styles.infoText}>Առաջադրանքները և բոնուսները կցուցադրվեն այստեղ՝ սերվերի միացումից հետո։</Text><View style={styles.progressTrack}><View style={styles.progressFill}/></View><Text style={styles.mutedSmall}>0 / 10 ուղևորություն</Text></View><Row title="Շաբաթական բոնուս" detail="Առաջընթացը դեռ հասանելի չէ" icon="★"/><Row title="Ակտիվության միավորներ" detail="Կհաշվարկվեն ուղևորություններից" icon="↗"/></>;
   const renderBalance = () =><><Text style={styles.pageTitle}>Հաշվեկշիռ</Text><Text style={styles.pageSubtitle}>Եկամուտներ և վճարումների պատմություն</Text><View style={styles.balanceCard}><Text style={styles.balanceCaption}>ԸՆԴՀԱՆՈՒՐ ՀԱՇՎԵԿՇԻՌ</Text><Text style={styles.balanceValue}>0 ֏</Text><Text style={styles.balanceFoot}>Ցուցադրական տվյալներ</Text></View><View style={styles.sectionHeading}><Text style={styles.sectionTitle}>ԳՈՐԾԱՐՔՆԵՐ</Text></View><View style={styles.emptyCard}><Text style={styles.emptyTitle}>Գործարքներ դեռ չկան</Text><Text style={styles.emptyText}>Ուղևորությունների վճարումները կերևան այստեղ։</Text></View></>;
 
@@ -187,6 +280,7 @@ setTimeout(()=>{map.invalidateSize();if(window.ReactNativeWebView)window.ReactNa
   const sectionHeader = (title) => <><TouchableOpacity style={styles.backButton} onPress={goBackProfile}><Text style={styles.backButtonText}>‹  ՀԵՏ</Text></TouchableOpacity><Text style={styles.pageTitle}>{title}</Text></>;
   const settingRow = (title, detail, value, setter) => <View style={styles.settingRow}><View style={{flex:1,paddingRight:12}}><Text style={styles.rowTitle}>{title}</Text><Text style={styles.rowDetail}>{detail}</Text></View><Switch value={value} onValueChange={setter} trackColor={{false:"#34445A",true:"#167D60"}} thumbColor={value?"#20D6A0":"#AAB5C2"}/></View>;
   const renderProfile = () => {
+    if(profileSection==="login") return <>{sectionHeader("Վարորդի մուտք")}<Text style={styles.pageSubtitle}>Մուտք գործիր գրանցված վարորդի հաշվով</Text>{[[ "Հեռախոսահամար",authPhone,setAuthPhone ]].map(([label,value,setter])=><View key={label} style={{marginBottom:12}}><Text style={styles.rowDetail}>{label}</Text><TextInput value={value} onChangeText={setter} keyboardType="phone-pad" placeholder={label} placeholderTextColor="#708198" style={{backgroundColor:"#101E30",borderColor:"#30445B",borderWidth:1,borderRadius:11,color:"#FFFFFF",paddingHorizontal:13,paddingVertical:12,marginTop:6}} /></View>)}<Text style={styles.rowDetail}>Գաղտնաբառ</Text><TextInput value={authPassword} onChangeText={setAuthPassword} secureTextEntry placeholder="Գաղտնաբառ" placeholderTextColor="#708198" style={{backgroundColor:"#101E30",borderColor:"#30445B",borderWidth:1,borderRadius:11,color:"#FFFFFF",paddingHorizontal:13,paddingVertical:12,marginTop:6,marginBottom:16}}/><TouchableOpacity disabled={authBusy} onPress={loginDriver} style={{backgroundColor:"#20D6A0",padding:15,borderRadius:12,alignItems:"center",opacity:authBusy?0.6:1}}><Text style={{color:"#06251B",fontWeight:"900"}}>{authBusy?"ՄՈՒՏՔ...":"ՄՈՒՏՔ ԳՈՐԾԵԼ"}</Text></TouchableOpacity><TouchableOpacity onPress={()=>setProfileSection("register")} style={{marginTop:18,padding:12}}><Text style={{color:"#20D6A0",fontWeight:"800",textAlign:"center"}}>Դեռ հաշիվ չունե՞ս․ գրանցվել որպես վարորդ</Text></TouchableOpacity></>;
     if(profileSection==="register") return <>{sectionHeader("Վարորդի գրանցում")}<Text style={styles.pageSubtitle}>Լրացրու տվյալները․ դիսպետչերը կհաստատի հաշիվը</Text>{driverRegMessage?<View style={styles.infoCard}><Text style={styles.infoTitle}>Սպասում է հաստատման</Text><Text style={styles.infoText}>{driverRegMessage}</Text></View>:null}
       {[[ "Անուն և ազգանուն",driverRegName,setDriverRegName],["Հեռախոսահամար",driverRegPhone,setDriverRegPhone],["Մեքենայի մակնիշ և մոդել",driverRegCar,setDriverRegCar],["Մեքենայի համարանիշ",driverRegPlate,setDriverRegPlate],["Վարորդական վկայականի համար",driverRegLicense,setDriverRegLicense]].map(([label,value,setter])=><View key={label} style={{marginBottom:12}}><Text style={styles.rowDetail}>{label}</Text><TextInput value={value} onChangeText={setter} placeholder={label} placeholderTextColor="#708198" style={{backgroundColor:"#101E30",borderColor:"#30445B",borderWidth:1,borderRadius:11,color:"#FFFFFF",paddingHorizontal:13,paddingVertical:12,marginTop:6}} /></View>)}
       <Text style={styles.rowDetail}>Գաղտնաբառ (առնվազն 8 նիշ)</Text><TextInput value={driverRegPassword} onChangeText={setDriverRegPassword} secureTextEntry placeholder="Ստեղծիր գաղտնաբառ" placeholderTextColor="#708198" style={{backgroundColor:"#101E30",borderColor:"#30445B",borderWidth:1,borderRadius:11,color:"#FFFFFF",paddingHorizontal:13,paddingVertical:12,marginTop:6,marginBottom:16}} />
@@ -201,7 +295,7 @@ setTimeout(()=>{map.invalidateSize();if(window.ReactNativeWebView)window.ReactNa
     if (profileSection === "rating") return <>{sectionHeader("Վարորդի վարկանիշ")}<Text style={styles.pageSubtitle}>Գնահատիր քո ծառայության որակը</Text><View style={styles.infoCard}><Text style={styles.infoTitle}>Քո գնահատականը</Text><View style={{flexDirection:"row",justifyContent:"center",gap:8,marginTop:16}}>{[1,2,3,4,5].map(n=><TouchableOpacity key={n} onPress={()=>setDriverRating(n)}><Text style={{fontSize:34,color:n<=driverRating?"#F6C453":"#526176"}}>★</Text></TouchableOpacity>)}</View><Text style={[styles.infoText,{textAlign:"center"}]}>{driverRating} / 5 • Գնահատականը պահվում է այս աշխատաշրջանում</Text></View></>;
     if (profileSection === "priority") return <>{sectionHeader("Առաջնահերթություն")}<Text style={styles.pageSubtitle}>Կառավարիր պատվերների նախընտրությունը</Text>{settingRow("Առաջնահերթ պատվերներ","Ընտրությունը գործում է տեղային ցուցադրական ռեժիմում",priorityEnabled,setPriorityEnabled)}<View style={styles.infoCard}><Text style={styles.infoText}>Իրական առաջնահերթ բաշխումը պետք է միացվի Taxi Lider սերվերում։</Text></View></>;
     if (profileSection === "support") return <>{sectionHeader("Օգնություն և աջակցություն")}<Text style={styles.pageSubtitle}>Օգնություն վարորդին</Text><Row title="Հաճախ տրվող հարցեր" detail="Հավելվածի օգտագործում" icon="?" onPress={()=>Alert.alert("Օգնություն","GPS-ի համար միացրու տեղադրությունը և թույլ տուր հավելվածին օգտվել դրանից։")}/><Row title="Կապ օպերատորի հետ" detail="Աջակցման կապուղին դեռ կարգավորված չէ" icon="☎" onPress={()=>Alert.alert("Աջակցություն","Օպերատորի հեռախոսահամարը պետք է ավելացվի սերվերի կարգավորումներում։")}/><Row title="Տեղեկացնել խնդրի մասին" detail="Սխալների հաղորդում" icon="!" onPress={()=>Alert.alert("Հաղորդում","Խնդրի ավտոմատ ուղարկումը կավելացվի սերվերի միացումից հետո։")}/></>;
-    return <><Text style={styles.pageTitle}>Իմ պրոֆիլը</Text><Text style={styles.pageSubtitle}>Վարորդի տվյալներ և կարգավորումներ</Text><View style={styles.profileCard}><View style={styles.bigAvatar}><Text style={styles.bigAvatarText}>A</Text></View><Text style={styles.profileName}>Taxi Lider վարորդ</Text><Text style={styles.profileStatus}>Նոր հաշիվ • Տվյալները լրացված չեն</Text></View><Row title="Գրանցվել որպես վարորդ" detail="Ստեղծել նոր վարորդի հաշիվ" icon="＋" onPress={()=>setProfileSection("register")}/><Row title="Անձնական տվյալներ" detail="Անուն, հեռախոս և լուսանկար" icon="●" onPress={()=>setProfileSection("personal")}/><Row title="Մեքենայի տվյալներ" detail="Մակնիշ, համարանիշ և գույն" icon="▰" onPress={()=>setProfileSection("car")}/><Row title="Փաստաթղթեր" detail="Վարորդական իրավունք և գրանցում" icon="▤" onPress={()=>setProfileSection("documents")}/><Row title="Սակագներ" detail="Ծառայության տեսակներ" icon="₽" onPress={()=>setProfileSection("tariffs")}/><Row title="Կարգավորումներ" detail="Ծանուցումներ և հավելված" icon="⚙" onPress={()=>setProfileSection("settings")}/><Row title="Օգնություն և աջակցություն" detail="Կապ օպերատորի հետ" icon="?" onPress={()=>setProfileSection("support")}/><Row title="Վարկանիշ" detail="Վարորդի գնահատական" icon="★" onPress={()=>setProfileSection("rating")}/><Row title="Առաջնահերթություն" detail="Պատվերների նախընտրություններ" icon="⇧" onPress={()=>setProfileSection("priority")}/><Row title="Դուրս գալ հաշվից" detail="Դուրս գալ վարորդի հաշվից" icon="↪" onPress={()=>Alert.alert("Դուրս գալ հաշվից","Հաշվից դուրս գալու գործառույթը կակտիվանա, երբ միացվի մուտքի և հաշիվների սերվերը։")}/></>;
+    return <><Text style={styles.pageTitle}>Իմ պրոֆիլը</Text><Text style={styles.pageSubtitle}>Վարորդի տվյալներ և կարգավորումներ</Text><View style={styles.profileCard}><View style={styles.bigAvatar}><Text style={styles.bigAvatarText}>{(authUser?.name||"T").slice(0,1).toUpperCase()}</Text></View><Text style={styles.profileName}>{authUser?.name||"Taxi Lider վարորդ"}</Text><Text style={styles.profileStatus}>{authUser ? (authUser.approval_status==="approved"?"Հաստատված վարորդ":authUser.approval_status==="rejected"?"Գրանցումը մերժված է":"Սպասում է դիսպետչերի հաստատմանը") : "Մուտք գործիր կամ գրանցվիր"}</Text></View>{authUser ? <Row title="Դուրս գալ հաշվից" detail={authUser.phone||""} icon="↪" onPress={logoutDriver}/> : <><Row title="Մուտք գործել որպես վարորդ" detail="Հեռախոսահամար և գաղտնաբառ" icon="→" onPress={()=>setProfileSection("login")}/><Row title="Գրանցվել որպես վարորդ" detail="Ստեղծել նոր վարորդի հաշիվ" icon="＋" onPress={()=>setProfileSection("register")}/></>}<Row title="Անձնական տվյալներ" detail="Անուն, հեռախոս և լուսանկար" icon="●" onPress={()=>setProfileSection("personal")}/><Row title="Մեքենայի տվյալներ" detail="Մակնիշ, համարանիշ և գույն" icon="▰" onPress={()=>setProfileSection("car")}/><Row title="Փաստաթղթեր" detail="Վարորդական իրավունք և գրանցում" icon="▤" onPress={()=>setProfileSection("documents")}/><Row title="Սակագներ" detail="Ծառայության տեսակներ" icon="₽" onPress={()=>setProfileSection("tariffs")}/><Row title="Կարգավորումներ" detail="Ծանուցումներ և հավելված" icon="⚙" onPress={()=>setProfileSection("settings")}/><Row title="Օգնություն և աջակցություն" detail="Կապ օպերատորի հետ" icon="?" onPress={()=>setProfileSection("support")}/><Row title="Վարկանիշ" detail="Վարորդի գնահատական" icon="★" onPress={()=>setProfileSection("rating")}/><Row title="Առաջնահերթություն" detail="Պատվերների նախընտրություններ" icon="⇧" onPress={()=>setProfileSection("priority")}/><Row title="Դուրս գալ հաշվից" detail="Դուրս գալ վարորդի հաշվից" icon="↪" onPress={()=>Alert.alert("Դուրս գալ հաշվից","Հաշվից դուրս գալու գործառույթը կակտիվանա, երբ միացվի մուտքի և հաշիվների սերվերը։")}/></>;
   };
 
   const screens = {orders:renderOrders, tasks:renderTasks, balance:renderBalance, profile:renderProfile};
