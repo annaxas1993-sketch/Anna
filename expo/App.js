@@ -3,6 +3,7 @@ import { SafeAreaView, View, Text, StyleSheet, TouchableOpacity, StatusBar, Scro
 import { WebView } from "react-native-webview";
 import * as Location from "expo-location";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import Constants from "expo-constants";
 
 const API_BASE = "https://taxi-lider-api.onrender.com";
 const DEFAULT_LOCATION = { latitude: 40.8128, longitude: 44.4883 };
@@ -109,6 +110,46 @@ async function drawRoute(from,to,label){const requestId=++routeRequestId;const c
 map.on('click',function(e){if(!pickupPoint){pickupPoint=e.latlng;pickupMarker=L.marker(e.latlng).addTo(map).bindPopup('Ուղևորի վերցնելու կետ').openPopup();document.getElementById('leaveRoute').style.display='block';const a=marker.getLatLng();drawRoute(a,pickupPoint,'ՈՒՂԵՎՈՐԻ ՎԵՐՑՆԵԼՈՒ ԵՐԹՈՒՂԻ');return;}if(!destinationPoint){destinationPoint=e.latlng;destinationMarker=L.marker(e.latlng).addTo(map).bindPopup('Ուղևորի վերջնակետ');document.getElementById('routeCard').innerHTML='<b>ՎԵՐՑՆԵԼՈՒ ԿԵՏԸ ԵՎ ՎԵՐՋՆԱԿԵՏԸ ՆՇՎԱԾ ԵՆ</b><div class="route-sub">Սեղմիր «Ուղևորին վերցրի»՝ A կետից B կետ երթուղին սկսելու համար։</div><button onclick="window.axasPassengerPickedUp()" style="margin-top:8px;padding:8px 12px;border:0;border-radius:8px;background:#20d6a0;color:#061810;font-weight:bold">ՈՒՂԵՎՈՐԻՆ ՎԵՐՑՐԻ</button>';return;}window.axasLeaveRoute();});
 window.axasToggleVoice=toggleVoiceGuidance;window.axasPassengerPickedUp=function(){if(!pickupPoint||!destinationPoint)return;passengerOnboard=true;drawRoute(pickupPoint,destinationPoint,'ՈՒՂԵՎՈՐԻՆ ՀԱՍՑՆԵԼՈՒ ԵՐԹՈՒՂԻ');};window.axasNavigateToAddress=function(lat,lng,name){window.axasLeaveRoute();addressTarget=L.latLng(lat,lng);destinationMarker=L.marker(addressTarget).addTo(map).bindPopup('<b>Գտնված հասցե</b><br>'+name).openPopup();document.getElementById('leaveRoute').style.display='block';window.axasFollow=false;lastAddressReroute=Date.now();map.setView(addressTarget,17,{animate:true});setTimeout(()=>{if(destinationMarker)destinationMarker.openPopup()},350);drawRoute(marker.getLatLng(),addressTarget,'ԸՆՏՐՎԱԾ ՀԱՍՑԵԻ ԵՐԹՈՒՂԻ')};const mapSearchInput=document.getElementById('mapSearchInput'),mapSearchResults=document.getElementById('mapSearchResults');let searchTimer=null,searchRequest=0;async function loadAddressSuggestions(q){const request=++searchRequest;mapSearchResults.style.display='block';mapSearchResults.innerHTML='<button>Հասցեները որոնվում են...</button>';try{const r=await fetch('https://nominatim.openstreetmap.org/search?format=jsonv2&limit=6&addressdetails=1&accept-language=hy,en&q='+encodeURIComponent(q));if(!r.ok)throw new Error('search');const items=await r.json();if(request!==searchRequest)return;if(!items.length){mapSearchResults.innerHTML='<button>Հասցեն չի գտնվել․ փորձիր ավելի մանրամասն գրել</button>';return}mapSearchResults.innerHTML='';items.forEach(item=>{const b=document.createElement('button');b.textContent=item.display_name;b.onclick=()=>{searchRequest++;mapSearchResults.style.display='none';document.querySelector('.map-search').classList.remove('open');mapSearchInput.value=item.display_name.split(',').slice(0,2).join(',');window.axasNavigateToAddress(Number(item.lat),Number(item.lon),item.display_name)};mapSearchResults.appendChild(b)})}catch(e){if(request===searchRequest)mapSearchResults.innerHTML='<button>Որոնման սխալ․ ստուգիր ինտերնետը</button>'}}mapSearchInput.addEventListener('input',()=>{clearTimeout(searchTimer);const q=mapSearchInput.value.trim();if(q.length<3){searchRequest++;mapSearchResults.style.display='none';mapSearchResults.innerHTML='';return}searchTimer=setTimeout(()=>loadAddressSuggestions(q),450)});document.getElementById('mapSearchButton').onclick=window.axasSearchAddress=function(){const wrap=document.querySelector('.map-search');if(wrap.classList.contains('open')){wrap.classList.remove('open');mapSearchResults.style.display='none';mapSearchResults.innerHTML='';mapSearchInput.blur();return}wrap.classList.add('open');setTimeout(()=>mapSearchInput.focus(),80)};mapSearchInput.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();const first=mapSearchResults.querySelector('button');if(mapSearchResults.style.display!=='none'&&first&&first.textContent!=='Հասցեները որոնվում են...')first.click();else window.axasSearchAddress()}});window.axasLeaveRoute=function(){routeRequestId++;if('speechSynthesis' in window)window.speechSynthesis.cancel();voiceManeuvers=[];voiceIndex=0;addressTarget=null;pickupPoint=null;destinationPoint=null;passengerOnboard=false;if(routeLine)map.removeLayer(routeLine);if(routeGlow)map.removeLayer(routeGlow);if(pickupMarker)map.removeLayer(pickupMarker);if(destinationMarker)map.removeLayer(destinationMarker);routeLine=null;routeGlow=null;pickupMarker=null;destinationMarker=null;document.getElementById('routeCard').innerHTML='';document.getElementById('routeCard').style.display='none';document.getElementById('leaveRoute').style.display='none';window.axasFollow=true;map.setView(marker.getLatLng(),16,{animate:true});};
 setTimeout(()=>{map.invalidateSize();if(window.ReactNativeWebView)window.ReactNativeWebView.postMessage('MAP_READY')},700);</script></body></html>`, []);
+
+  // Check GitHub Releases for a newer APK whenever the driver opens/resumes the app.
+  useEffect(() => {
+    let active = true;
+    let alerted = false;
+    let lastCheck = 0;
+    const installedBuild = Number(Constants.expoConfig?.android?.versionCode || 1);
+    const checkForUpdate = async () => {
+      if (!active || alerted || Date.now() - lastCheck < 60000) return;
+      lastCheck = Date.now();
+      try {
+        const response = await fetch("https://api.github.com/repos/annaxas1993-sketch/Anna/releases/latest", {
+          headers: { Accept: "application/vnd.github+json" }
+        });
+        if (!response.ok) return;
+        const release = await response.json();
+        const match = String(release.tag_name || "").match(/^taxi-lider-build-(\d+)$/);
+        const latestBuild = match ? Number(match[1]) : 0;
+        const apk = (release.assets || []).find(asset => asset.name === "app-release.apk");
+        if (!active || !apk || latestBuild <= installedBuild) return;
+        alerted = true;
+        Alert.alert(
+          "TAXI LIDER-ի նոր տարբերակ կա",
+          "Հասանելի է նոր թարմացում։ Ներբեռնե՞լ և տեղադրե՞լ նոր տարբերակը։",
+          [
+            { text: "Ավելի ուշ", style: "cancel", onPress: () => { alerted = false; } },
+            { text: "Թարմացնել", onPress: () => Linking.openURL(apk.browser_download_url).catch(() => Alert.alert("Սխալ", "Չհաջողվեց բացել APK-ի ներբեռնումը։")) }
+          ],
+          { cancelable: true, onDismiss: () => { alerted = false; } }
+        );
+      } catch (_) {
+        // Update checks are optional; never block driver sign-in or order handling.
+      }
+    };
+    checkForUpdate();
+    const subscription = AppState.addEventListener("change", state => {
+      if (state === "active") checkForUpdate();
+    });
+    return () => { active = false; subscription.remove(); };
+  }, []);
 
   useEffect(() => {
     let active = true;
