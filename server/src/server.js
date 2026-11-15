@@ -10,6 +10,51 @@ app.use(rateLimit({windowMs:60000,limit:120,standardHeaders:true,legacyHeaders:f
 app.use(express.static(require("path").join(__dirname,"../public")));
 const phone=z.string().min(6).max(24), coords=z.object({lat:z.number().min(-90).max(90),lng:z.number().min(-180).max(180)});
 const wrap=fn=>(req,res,next)=>Promise.resolve(fn(req,res,next)).catch(next);
+
+// Offer each dispatched order to one nearest free approved driver at a time.
+async function dispatchNext(orderId){
+ const client=await db.pool.connect();
+ let emitted=null;
+ try{
+  await client.query("BEGIN");
+  const found=await client.query("SELECT * FROM orders WHERE id=$1 AND status='searching' AND dispatch_enabled=TRUE FOR UPDATE",[orderId]);
+  if(!found.rowCount){await client.query("COMMIT");return;}
+  const order=found.rows[0];
+  if(order.offered_driver_id&&order.offer_expires_at&&new Date(order.offer_expires_at)>new Date()){await client.query("COMMIT");return;}
+  const tried=[...(order.tried_driver_ids||[])];
+  if(order.offered_driver_id&&!tried.includes(order.offered_driver_id))tried.push(order.offered_driver_id);
+  const sql=[
+   "SELECT u.id,l.lat,l.lng,",
+   "(6371000*2*ASIN(SQRT(POWER(SIN(RADIANS(l.lat-$1)/2),2)+COS(RADIANS($1))*COS(RADIANS(l.lat))*POWER(SIN(RADIANS(l.lng-$2)/2),2)))) AS distance_m",
+   "FROM users u JOIN driver_locations l ON l.driver_id=u.id",
+   "WHERE u.role='driver' AND u.approval_status='approved' AND u.is_online=TRUE",
+   "AND l.updated_at>NOW()-INTERVAL '90 seconds'",
+   "AND NOT(u.id=ANY($3::uuid[]))",
+   "AND NOT EXISTS(SELECT 1 FROM orders busy WHERE busy.driver_id=u.id AND busy.status IN ('accepted','arrived','started'))",
+   "ORDER BY distance_m ASC LIMIT 1"
+  ].join(" ");
+  const next=await client.query(sql,[order.pickup_lat,order.pickup_lng,tried]);
+  if(!next.rowCount){
+   await client.query("UPDATE orders SET offered_driver_id=NULL,offer_expires_at=NULL,tried_driver_ids=$2,dispatch_status='waiting' WHERE id=$1",[orderId,tried]);
+   await client.query("COMMIT");
+   io.to("admins").emit("order:dispatch",{orderId,status:"waiting"});
+   return;
+  }
+  const driver=next.rows[0];
+  const updated=await client.query("UPDATE orders SET offered_driver_id=$2,offer_expires_at=NOW()+INTERVAL '25 seconds',tried_driver_ids=$3,dispatch_attempts=dispatch_attempts+1,dispatch_status='offered' WHERE id=$1 RETURNING *",[orderId,driver.id,tried]);
+  emitted={driverId:driver.id,order:updated.rows[0],distance_m:Math.round(Number(driver.distance_m))};
+  await client.query("COMMIT");
+ }catch(error){await client.query("ROLLBACK");throw error;}
+ finally{client.release();}
+ if(emitted){io.to("user:"+emitted.driverId).emit("order:offer",emitted);io.to("admins").emit("order:dispatch",{orderId,status:"offered",driverId:emitted.driverId,distance_m:emitted.distance_m});}
+}
+async function dispatchQueueTick(){
+ try{
+  const q=await db.query("SELECT id FROM orders WHERE status='searching' AND dispatch_enabled=TRUE ORDER BY created_at ASC LIMIT 30");
+  for(const row of q.rows){try{await dispatchNext(row.id);}catch(error){console.error("Dispatch queue item failed",row.id,error.message);}}
+ }catch(error){console.error("Dispatch queue failed",error.message);}
+}
+
 app.get("/health",(req,res)=>res.json({ok:true,service:"AXAS Driver API"}));
 app.post("/api/setup/admin",wrap(async(req,res)=>{
  if(!process.env.ADMIN_SETUP_KEY||req.headers["x-setup-key"]!==process.env.ADMIN_SETUP_KEY)return res.status(403).json({error:"Setup key is invalid"});
@@ -42,13 +87,13 @@ app.get("/api/me",auth,wrap(async(req,res)=>{const r=await db.query("SELECT id,n
 const driverApproved=wrap(async(req,res,next)=>{const r=await db.query("SELECT approval_status FROM users WHERE id=$1 AND role='driver'",[req.user.sub]);if(!r.rowCount||r.rows[0].approval_status!=="approved")return res.status(403).json({error:r.rows[0]?.approval_status==="rejected"?"Գրանցումը մերժվել է։ Կապվիր դիսպետչերի հետ։":"Հաշիվը սպասում է դիսպետչերի հաստատմանը։",approval_status:r.rows[0]?.approval_status||"pending"});next();});
 app.patch("/api/drivers/availability",auth,roles("driver"),driverApproved,wrap(async(req,res)=>{const online=z.boolean().parse(req.body.online);await db.query("UPDATE users SET is_online=$1 WHERE id=$2",[online,req.user.sub]);io.emit("driver:availability",{driverId:req.user.sub,online});res.json({online});}));
 app.post("/api/drivers/location",auth,roles("driver"),driverApproved,wrap(async(req,res)=>{const p=coords.parse(req.body);await db.query("INSERT INTO driver_locations(driver_id,lat,lng,updated_at) VALUES($1,$2,$3,NOW()) ON CONFLICT(driver_id) DO UPDATE SET lat=EXCLUDED.lat,lng=EXCLUDED.lng,updated_at=NOW()",[req.user.sub,p.lat,p.lng]);io.to("admins").emit("driver:location",{driverId:req.user.sub,...p});res.json({saved:true});}));
-app.post("/api/orders",auth,roles("passenger","admin"),wrap(async(req,res)=>{
+app.post("/api/orders",auth,roles("passenger"),wrap(async(req,res)=>{
  const b=z.object({pickup_address:z.string().min(3).max(240),destination_address:z.string().min(3).max(240),pickup:coords,destination:coords,note:z.string().max(500).optional()}).parse(req.body);
  const r=await db.query("INSERT INTO orders(passenger_id,pickup_address,destination_address,pickup_lat,pickup_lng,dest_lat,dest_lng,note,status) VALUES($1,$2,$3,$4,$5,$6,$7,$8,'searching') RETURNING *",[req.user.sub,b.pickup_address,b.destination_address,b.pickup.lat,b.pickup.lng,b.destination.lat,b.destination.lng,b.note||null]);
- io.to("drivers").emit("order:new",r.rows[0]);res.status(201).json({order:r.rows[0]});
+ io.to("admins").emit("order:new",r.rows[0]);res.status(201).json({order:r.rows[0]});
 }));
-app.get("/api/orders/available",auth,roles("driver"),driverApproved,wrap(async(req,res)=>{const r=await db.query("SELECT o.*,u.name AS passenger_name,u.phone AS passenger_phone FROM orders o JOIN users u ON u.id=o.passenger_id WHERE o.status='searching' ORDER BY o.created_at DESC LIMIT 50");res.json({orders:r.rows});}));
-app.post("/api/orders/:id/accept",auth,roles("driver"),driverApproved,wrap(async(req,res)=>{const r=await db.query("UPDATE orders SET driver_id=$1,status='accepted',accepted_at=NOW() WHERE id=$2 AND status='searching' AND EXISTS(SELECT 1 FROM users WHERE id=$1 AND role='driver' AND approval_status='approved' AND is_online=TRUE) RETURNING *",[req.user.sub,req.params.id]);if(!r.rowCount)return res.status(409).json({error:"Պատվերն արդեն վերցված է կամ հասանելի չէ"});io.emit("order:updated",r.rows[0]);res.json({order:r.rows[0]});}));
+app.get("/api/orders/available",auth,roles("driver"),driverApproved,wrap(async(req,res)=>{const r=await db.query("SELECT o.*,u.name AS passenger_name,u.phone AS passenger_phone FROM orders o JOIN users u ON u.id=o.passenger_id WHERE o.status='searching' AND o.dispatch_enabled=TRUE AND o.offered_driver_id=$1 AND o.offer_expires_at>NOW() ORDER BY o.created_at DESC LIMIT 10",[req.user.sub]);res.json({orders:r.rows});}));
+app.post("/api/orders/:id/accept",auth,roles("driver"),driverApproved,wrap(async(req,res)=>{const r=await db.query("UPDATE orders SET driver_id=$1,status='accepted',accepted_at=NOW(),dispatch_enabled=FALSE,dispatch_status='accepted',offered_driver_id=NULL,offer_expires_at=NULL AND EXISTS(SELECT 1 FROM users WHERE id=$1 AND role='driver' AND approval_status='approved' AND is_online=TRUE) RETURNING *",[req.user.sub,req.params.id]);if(!r.rowCount)return res.status(409).json({error:"Պատվերն արդեն վերցված է կամ հասանելի չէ"});io.emit("order:updated",r.rows[0]);res.json({order:r.rows[0]});}));
 app.post("/api/orders/:id/status",auth,roles("driver"),driverApproved,wrap(async(req,res)=>{const status=z.enum(["arrived","started","completed","cancelled"]).parse(req.body.status);const r=await db.query("UPDATE orders SET status=$1,started_at=CASE WHEN $1='started' THEN NOW() ELSE started_at END,completed_at=CASE WHEN $1='completed' THEN NOW() ELSE completed_at END WHERE id=$2 AND driver_id=$3 AND status IN ('accepted','arrived','started') RETURNING *",[status,req.params.id,req.user.sub]);if(!r.rowCount)return res.status(409).json({error:"Հնարավոր չէ փոխել պատվերի վիճակը"});io.emit("order:updated",r.rows[0]);res.json({order:r.rows[0]});}));
 app.get("/api/orders/mine",auth,wrap(async(req,res)=>{const col=req.user.role==="driver"?"driver_id":"passenger_id";const r=await db.query(`SELECT o.*,u.name AS passenger_name,u.phone AS passenger_phone FROM orders o JOIN users u ON u.id=o.passenger_id WHERE o.${col}=$1 ORDER BY o.created_at DESC LIMIT 100`,[req.user.sub]);res.json({orders:r.rows});}));
 app.get("/api/admin/drivers",auth,roles("admin"),wrap(async(req,res)=>{const r=await db.query("SELECT u.id,u.name,u.phone,u.car_model,u.plate_number,u.driver_license_number,u.approval_status,u.is_online,l.lat,l.lng,l.updated_at FROM users u LEFT JOIN driver_locations l ON l.driver_id=u.id WHERE u.role='driver' ORDER BY CASE u.approval_status WHEN 'pending' THEN 0 WHEN 'approved' THEN 1 ELSE 2 END,u.created_at DESC");res.json({drivers:r.rows});}));
@@ -57,6 +102,12 @@ app.patch("/api/admin/drivers/:id/approval",auth,roles("admin"),wrap(async(req,r
 app.get("/api/admin/orders",auth,roles("admin"),wrap(async(req,res)=>{
  const r=await db.query("SELECT o.*,p.name AS passenger_name,p.phone AS passenger_phone,d.name AS driver_name,d.phone AS driver_phone FROM orders o JOIN users p ON p.id=o.passenger_id LEFT JOIN users d ON d.id=o.driver_id ORDER BY o.created_at DESC LIMIT 200");
  res.json({orders:r.rows});
+}));
+app.post("/api/admin/orders/:id/dispatch",auth,roles("admin"),wrap(async(req,res)=>{
+ const r=await db.query("UPDATE orders SET dispatch_enabled=TRUE,dispatch_status='queued',offered_driver_id=NULL,offer_expires_at=NULL,tried_driver_ids='{}',dispatch_attempts=0 WHERE id=$1 AND status='searching' RETURNING id",[req.params.id]);
+ if(!r.rowCount)return res.status(409).json({error:"Պատվերն արդեն բաշխված է կամ հասանելի չէ"});
+ await dispatchNext(req.params.id);
+ res.json({ok:true,message:"Պատվերը հերթով առաջարկվում է ամենամոտ ազատ վարորդներին"});
 }));
 app.patch("/api/admin/orders/:id/assign",auth,roles("admin"),wrap(async(req,res)=>{
  const b=z.object({driver_id:z.string().uuid()}).parse(req.body);
@@ -77,6 +128,6 @@ async function start(){
  const fs=require("fs"),path=require("path");
  const schema=fs.readFileSync(path.join(__dirname,"../db/schema.sql"),"utf8");
  await db.query(schema);
- server.listen(Number(process.env.PORT||3000),"0.0.0.0",()=>console.log("TAXI LIDER API listening"));
+ server.listen(Number(process.env.PORT||3000),"0.0.0.0",()=>{console.log("TAXI LIDER API listening");setInterval(dispatchQueueTick,4000);});
 }
 start().catch(error=>{console.error("Database initialization failed",error);process.exit(1);});
