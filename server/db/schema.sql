@@ -16,7 +16,8 @@ CREATE TABLE IF NOT EXISTS driver_locations (
 );
 CREATE TABLE IF NOT EXISTS orders (
  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
- passenger_id UUID NOT NULL REFERENCES users(id),
+ passenger_id UUID REFERENCES users(id),
+ passenger_name VARCHAR(80), passenger_phone VARCHAR(24),
  driver_id UUID REFERENCES users(id),
  pickup_address VARCHAR(240) NOT NULL, destination_address VARCHAR(240) NOT NULL,
  pickup_lat DOUBLE PRECISION NOT NULL, pickup_lng DOUBLE PRECISION NOT NULL,
@@ -49,3 +50,7 @@ ALTER TABLE orders ADD COLUMN IF NOT EXISTS offer_expires_at TIMESTAMPTZ;
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS tried_driver_ids UUID[] NOT NULL DEFAULT '{}';
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS dispatch_attempts INTEGER NOT NULL DEFAULT 0;
 CREATE INDEX IF NOT EXISTS orders_dispatch_queue_idx ON orders(dispatch_enabled,status,created_at) WHERE dispatch_enabled=TRUE;
+
+ALTER TABLE orders ALTER COLUMN passenger_id DROP NOT NULL;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS passenger_name VARCHAR(80);
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS passenger_phone VARCHAR(24);
