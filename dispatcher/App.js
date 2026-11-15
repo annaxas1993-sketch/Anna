@@ -7,7 +7,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import {WebView} from 'react-native-webview';
 
 const KEY = 'taxi_lider_dispatcher_server_url';
-const DEFAULT_URL = 'https://taxi-lider-api.onrender.com/';
+const DEFAULT_URL = 'https://cheque-cook-signals-eva.trycloudflare.com/';
 
 function normalize(value) {
   let v = String(value || '').trim();
