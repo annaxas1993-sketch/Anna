@@ -282,7 +282,8 @@ setTimeout(()=>{map.invalidateSize();if(window.ReactNativeWebView)window.ReactNa
     } catch(e) { Alert.alert("Գրանցման սխալ",e.message||"Սերվերի հետ կապ չկա։"); }
     finally { setDriverRegBusy(false); }
   };
-\n  const goBackProfile = () => setProfileSection("");
+
+  const goBackProfile = () => setProfileSection("");
   const sectionHeader = (title) => <><TouchableOpacity style={styles.backButton} onPress={goBackProfile}><Text style={styles.backButtonText}>‹  ՀԵՏ</Text></TouchableOpacity><Text style={styles.pageTitle}>{title}</Text></>;
   const settingRow = (title, detail, value, setter) => <View style={styles.settingRow}><View style={{flex:1,paddingRight:12}}><Text style={styles.rowTitle}>{title}</Text><Text style={styles.rowDetail}>{detail}</Text></View><Switch value={value} onValueChange={setter} trackColor={{false:"#34445A",true:"#167D60"}} thumbColor={value?"#20D6A0":"#AAB5C2"}/></View>;
   const renderProfile = () => {
