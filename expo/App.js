@@ -67,6 +67,9 @@ export default function App() {
   const [authPhone,setAuthPhone]=useState("");
   const [authPassword,setAuthPassword]=useState("");
   const [authBusy,setAuthBusy]=useState(false);
+  const [driverBalance,setDriverBalance]=useState(0);
+  const [balanceTransactions,setBalanceTransactions]=useState([]);
+  const [balanceLoading,setBalanceLoading]=useState(false);
   const [availableOrders,setAvailableOrders]=useState([]);
   const [myOrders,setMyOrders]=useState([]);
   const mapRef = useRef(null);
@@ -172,6 +175,19 @@ setTimeout(()=>{map.invalidateSize();if(window.ReactNativeWebView)window.ReactNa
     if (!authToken || authUser?.role !== "driver" || authUser?.approval_status !== "approved" || !online || !gpsReady) return;
     fetch(API_BASE + "/api/drivers/location", { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + authToken }, body: JSON.stringify({ lat: location.latitude, lng: location.longitude }) }).catch(() => {});
   }, [authToken, authUser, online, gpsReady, location.latitude, location.longitude]);
+
+  // Load the authenticated driver wallet and its server-side top-up history.
+  useEffect(() => {
+    if (!authToken || authUser?.role !== "driver") { setDriverBalance(0); setBalanceTransactions([]); return; }
+    let active = true;
+    setBalanceLoading(true);
+    fetch(API_BASE + "/api/drivers/balance", { headers: { Authorization: "Bearer " + authToken } })
+      .then(async response => { const data = await response.json().catch(() => ({})); if (!response.ok) throw new Error(data.error || "Հաշվեկշիռը չբեռնվեց"); return data; })
+      .then(data => { if (active) { setDriverBalance(Number(data.balance || 0)); setBalanceTransactions(data.transactions || []); } })
+      .catch(() => {})
+      .finally(() => { if (active) setBalanceLoading(false); });
+    return () => { active = false; };
+  }, [authToken, authUser?.role]);
 
   // Refresh available and assigned orders while an approved driver is online.
   useEffect(() => {
@@ -318,7 +334,7 @@ setTimeout(()=>{map.invalidateSize();if(window.ReactNativeWebView)window.ReactNa
     </>
   );
   const renderTasks = () =><><Text style={styles.pageTitle}>Առաջադրանքներ</Text><Text style={styles.pageSubtitle}>Բոնուսներ և օրվա նպատակներ</Text><View style={styles.infoCard}><Text style={styles.infoTitle}>Օրվա նպատակ</Text><Text style={styles.infoText}>Առաջադրանքները և բոնուսները կցուցադրվեն այստեղ՝ սերվերի միացումից հետո։</Text><View style={styles.progressTrack}><View style={styles.progressFill}/></View><Text style={styles.mutedSmall}>0 / 10 ուղևորություն</Text></View><Row title="Շաբաթական բոնուս" detail="Առաջընթացը դեռ հասանելի չէ" icon="★"/><Row title="Ակտիվության միավորներ" detail="Կհաշվարկվեն ուղևորություններից" icon="↗"/></>;
-  const renderBalance = () =><><Text style={styles.pageTitle}>Հաշվեկշիռ</Text><Text style={styles.pageSubtitle}>Եկամուտներ և վճարումների պատմություն</Text><View style={styles.balanceCard}><Text style={styles.balanceCaption}>ԸՆԴՀԱՆՈՒՐ ՀԱՇՎԵԿՇԻՌ</Text><Text style={styles.balanceValue}>0 ֏</Text><Text style={styles.balanceFoot}>Ցուցադրական տվյալներ</Text></View><View style={styles.sectionHeading}><Text style={styles.sectionTitle}>ԳՈՐԾԱՐՔՆԵՐ</Text></View><View style={styles.emptyCard}><Text style={styles.emptyTitle}>Գործարքներ դեռ չկան</Text><Text style={styles.emptyText}>Ուղևորությունների վճարումները կերևան այստեղ։</Text></View></>;
+  const renderBalance = () =><><Text style={styles.pageTitle}>Հաշվեկշիռ</Text><Text style={styles.pageSubtitle}>Սերվերի հաշվեկշիռ և դիսպետչերի լիցքավորումներ</Text><View style={styles.balanceCard}><Text style={styles.balanceCaption}>ԸՆԴՀԱՆՈՒՐ ՀԱՇՎԵԿՇԻՌ</Text><Text style={styles.balanceValue}>{driverBalance.toLocaleString("hy-AM")} ֏</Text><Text style={styles.balanceFoot}>{balanceLoading?"Թարմացվում է...":authUser?"Տվյալները բեռնվում են TAXI LIDER սերվերից":"Մուտք գործիր՝ հաշվեկշիռը տեսնելու համար"}</Text></View><View style={styles.sectionHeading}><Text style={styles.sectionTitle}>ԼԻՑՔԱՎՈՐՄԱՆ ՊԱՏՄՈՒԹՅՈՒՆ</Text></View>{!authUser?<View style={styles.emptyCard}><Text style={styles.emptyTitle}>Մուտք գործիր վարորդի հաշվով</Text></View>:balanceTransactions.length?balanceTransactions.map(tx=><View key={tx.id} style={[styles.infoCard,{marginTop:9}]}><Text style={styles.infoTitle}>+{Number(tx.amount).toLocaleString("hy-AM")} ֏</Text><Text style={styles.infoText}>{tx.note||"Դիսպետչերի լիցքավորում"} · {new Date(tx.created_at).toLocaleString("hy-AM")}</Text></View>):<View style={styles.emptyCard}><Text style={styles.emptyTitle}>{balanceLoading?"Բեռնվում է...":"Լիցքավորումներ դեռ չկան"}</Text><Text style={styles.emptyText}>Դիսպետչերի ավելացրած գումարները կհայտնվեն այստեղ։</Text></View>}</>;
 
   const submitDriverRegistration = async () => {
     if(!driverRegName.trim()||!driverRegPhone.trim()||driverRegPassword.length<8||!driverRegCar.trim()||!driverRegPlate.trim()||!driverRegLicense.trim()){Alert.alert("Լրացրու տվյալները","Լրացրու բոլոր դաշտերը, գաղտնաբառը՝ առնվազն 8 նիշ։");return;}
@@ -327,8 +343,9 @@ setTimeout(()=>{map.invalidateSize();if(window.ReactNativeWebView)window.ReactNa
       const response=await fetch("https://taxi-lider-api.onrender.com/api/auth/register",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:driverRegName.trim(),phone:driverRegPhone.trim(),password:driverRegPassword,role:"driver",car_model:driverRegCar.trim(),plate_number:driverRegPlate.trim(),driver_license_number:driverRegLicense.trim()})});
       const data=await response.json().catch(()=>({}));
       if(!response.ok)throw new Error(data.error||"Գրանցումը չհաջողվեց");
-      setDriverRegPassword("");setDriverRegMessage("Գրանցումը հաջող է։ Հաշիվը սպասում է դիսպետչերի հաստատմանը։");
-      Alert.alert("Գրանցումն ուղարկված է","Դիսպետչերը պետք է հաստատի քո հաշիվը։");
+      await AsyncStorage.setItem("taxi_lider_driver_token",data.token);
+      setAuthToken(data.token);setAuthUser(data.user);setOnline(false);setDriverRegPassword("");setDriverRegMessage("Գրանցումը հաջող է։ Հաշիվը սպասում է դիսպետչերի հաստատմանը։");setProfileSection("");
+      Alert.alert("Գրանցումն ուղարկված է","Հաշիվը պահպանվեց սերվերում։ Դիսպետչերը պետք է հաստատի այն։");
     } catch(e) { Alert.alert("Գրանցման սխալ",e.message||"Սերվերի հետ կապ չկա։"); }
     finally { setDriverRegBusy(false); }
   };
