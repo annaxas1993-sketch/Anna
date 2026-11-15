@@ -64,7 +64,7 @@ export default function App() {
       {showSettings ? (
         <View style={styles.settings}>
           <Text style={styles.heading}>Սերվերի հասցե</Text>
-          <Text style={styles.help}>Մինչև արտաքին կապը կարգավորելը կարող ես օգտագործել հեռախոսի տեղական հասցեն։ Ավելի ուշ այստեղ կտեղադրենք մշտական HTTPS հղումը։</Text>
+          <Text style={styles.help}>Մշտական սերվերի հասցեն արդեն լրացված է։ Եթե հասցեն փոխվի, այստեղ կարող ես տեղադրել նորը։</Text>
           <TextInput value={draft} onChangeText={setDraft} autoCapitalize="none" autoCorrect={false} keyboardType="url" placeholder="https://server.example.com" placeholderTextColor="#7890a8" style={styles.input} />
           <TouchableOpacity style={styles.connect} onPress={connect}><Text style={styles.connectText}>ՊԱՀՊԱՆԵԼ ԵՎ ՄԻԱՆԱԼ</Text></TouchableOpacity>
         </View>
