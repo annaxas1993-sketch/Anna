@@ -7,7 +7,7 @@ on:
       - '.github/workflows/build-apk.yml'
   workflow_dispatch:
 permissions:
-  contents: read
+  contents: write
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -42,3 +42,13 @@ jobs:
           path: expo/android/app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
           retention-days: 30
+      - name: Publish downloadable TAXI LIDER APK release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: taxi-lider-build-${{ github.run_number }}
+          name: TAXI LIDER APK #${{ github.run_number }}
+          files: expo/android/app/build/outputs/apk/release/app-release.apk
+          generate_release_notes: false
+          make_latest: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
