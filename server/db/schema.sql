@@ -23,11 +23,19 @@ CREATE TABLE IF NOT EXISTS orders (
  pickup_lat DOUBLE PRECISION NOT NULL, pickup_lng DOUBLE PRECISION NOT NULL,
  dest_lat DOUBLE PRECISION NOT NULL, dest_lng DOUBLE PRECISION NOT NULL,
  note VARCHAR(500),
+ trip_distance_m DOUBLE PRECISION NOT NULL DEFAULT 0,
+ meter_fare NUMERIC(12,2) NOT NULL DEFAULT 400,
+ meter_last_lat DOUBLE PRECISION,
+ meter_last_lng DOUBLE PRECISION,
  status VARCHAR(20) NOT NULL DEFAULT 'searching'
  CHECK(status IN ('searching','accepted','arrived','started','completed','cancelled')),
  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), accepted_at TIMESTAMPTZ,
  started_at TIMESTAMPTZ, completed_at TIMESTAMPTZ
 );
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS trip_distance_m DOUBLE PRECISION NOT NULL DEFAULT 0;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS meter_fare NUMERIC(12,2) NOT NULL DEFAULT 400;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS meter_last_lat DOUBLE PRECISION;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS meter_last_lng DOUBLE PRECISION;
 CREATE INDEX IF NOT EXISTS orders_status_created_idx ON orders(status,created_at DESC);
 CREATE INDEX IF NOT EXISTS orders_driver_created_idx ON orders(driver_id,created_at DESC);
 
