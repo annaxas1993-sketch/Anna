@@ -87,6 +87,19 @@ app.get("/api/me",auth,wrap(async(req,res)=>{const r=await db.query("SELECT id,n
 const driverApproved=wrap(async(req,res,next)=>{const r=await db.query("SELECT approval_status FROM users WHERE id=$1 AND role='driver'",[req.user.sub]);if(!r.rowCount||r.rows[0].approval_status!=="approved")return res.status(403).json({error:r.rows[0]?.approval_status==="rejected"?"Գրանցումը մերժվել է։ Կապվիր դիսպետչերի հետ։":"Հաշիվը սպասում է դիսպետչերի հաստատմանը։",approval_status:r.rows[0]?.approval_status||"pending"});next();});
 app.patch("/api/drivers/availability",auth,roles("driver"),driverApproved,wrap(async(req,res)=>{const online=z.boolean().parse(req.body.online);await db.query("UPDATE users SET is_online=$1 WHERE id=$2",[online,req.user.sub]);io.emit("driver:availability",{driverId:req.user.sub,online});res.json({online});}));
 app.post("/api/drivers/location",auth,roles("driver"),driverApproved,wrap(async(req,res)=>{const p=coords.parse(req.body);await db.query("INSERT INTO driver_locations(driver_id,lat,lng,updated_at) VALUES($1,$2,$3,NOW()) ON CONFLICT(driver_id) DO UPDATE SET lat=EXCLUDED.lat,lng=EXCLUDED.lng,updated_at=NOW()",[req.user.sub,p.lat,p.lng]);io.to("admins").emit("driver:location",{driverId:req.user.sub,...p});res.json({saved:true});}));
+app.get("/api/drivers/vehicle-checks",auth,roles("driver"),wrap(async(req,res)=>{
+ const r=await db.query("SELECT id,checks,note,status,created_at FROM driver_vehicle_checks WHERE driver_id=$1 ORDER BY created_at DESC LIMIT 20",[req.user.sub]);
+ res.json({checks:r.rows});
+}));
+app.post("/api/drivers/vehicle-checks",auth,roles("driver"),driverApproved,wrap(async(req,res)=>{
+ const checks=z.object({brakes:z.boolean(),tires:z.boolean(),lights:z.boolean(),signals:z.boolean(),mirrors:z.boolean(),seatbelts:z.boolean(),documents:z.boolean()}).parse(req.body.checks);
+ const note=z.string().max(500).optional().parse(req.body.note||"");
+ const status=Object.values(checks).every(Boolean)?"passed":"attention";
+ if(status==="attention"&&!note.trim())return res.status(400).json({error:"Նկարագրիր հայտնաբերված խնդիրը"});
+ const r=await db.query("INSERT INTO driver_vehicle_checks(driver_id,checks,note,status) VALUES($1,$2::jsonb,$3,$4) RETURNING id,checks,note,status,created_at",[req.user.sub,JSON.stringify(checks),note||null,status]);
+ io.to("admins").emit("vehicle-check:new",{driverId:req.user.sub,check:r.rows[0]});
+ res.status(201).json({check:r.rows[0]});
+}));
 app.get("/api/drivers/balance",auth,roles("driver"),wrap(async(req,res)=>{const [u,t]=await Promise.all([db.query("SELECT balance FROM users WHERE id=$1 AND role='driver'",[req.user.sub]),db.query("SELECT id,amount,note,created_at FROM driver_balance_transactions WHERE driver_id=$1 ORDER BY created_at DESC LIMIT 100",[req.user.sub])]);if(!u.rowCount)return res.status(404).json({error:"Վարորդը չի գտնվել"});res.json({balance:u.rows[0].balance,transactions:t.rows});}));
 app.post("/api/orders",auth,roles("passenger"),wrap(async(req,res)=>{
  const b=z.object({pickup_address:z.string().min(3).max(240),destination_address:z.string().min(3).max(240),pickup:coords,destination:coords,note:z.string().max(500).optional()}).parse(req.body);
@@ -115,6 +128,10 @@ app.post("/api/admin/drivers/:id/balance/topup",auth,roles("admin"),wrap(async(r
   io.to("admins").emit("driver:balance",{driverId:req.params.id,balance:updated.rows[0].balance});
   res.json({driver:updated.rows[0],transaction:tx.rows[0]});
  }catch(error){await client.query("ROLLBACK");throw error;}finally{client.release();}
+}));
+app.get("/api/admin/vehicle-checks",auth,roles("admin"),wrap(async(req,res)=>{
+ const r=await db.query("SELECT c.id,c.checks,c.note,c.status,c.created_at,u.id AS driver_id,u.name AS driver_name,u.phone,u.car_model,u.plate_number FROM driver_vehicle_checks c JOIN users u ON u.id=c.driver_id ORDER BY c.created_at DESC LIMIT 150");
+ res.json({checks:r.rows});
 }));
 app.get("/api/admin/drivers",auth,roles("admin"),wrap(async(req,res)=>{const r=await db.query("SELECT u.id,u.name,u.phone,u.car_model,u.plate_number,u.driver_license_number,u.approval_status,u.is_online,u.balance,l.lat,l.lng,l.updated_at FROM users u LEFT JOIN driver_locations l ON l.driver_id=u.id WHERE u.role='driver' ORDER BY CASE u.approval_status WHEN 'pending' THEN 0 WHEN 'approved' THEN 1 ELSE 2 END,u.created_at DESC");res.json({drivers:r.rows});}));
 app.patch("/api/admin/drivers/:id/approval",auth,roles("admin"),wrap(async(req,res)=>{const status=z.enum(["approved","rejected"]).parse(req.body.status);const r=await db.query("UPDATE users SET approval_status=$1,is_online=FALSE WHERE id=$2 AND role='driver' AND approval_status='pending' RETURNING id,name,phone,car_model,plate_number,driver_license_number,approval_status",[status,req.params.id]);if(!r.rowCount)return res.status(409).json({error:"Վարորդը չի գտնվել կամ արդեն որոշում կա"});io.emit("driver:approval",{driverId:r.rows[0].id,status});res.json({driver:r.rows[0]});}));
