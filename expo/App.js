@@ -175,7 +175,7 @@ setTimeout(()=>{map.invalidateSize();if(window.ReactNativeWebView)window.ReactNa
 
   // Refresh available and assigned orders while an approved driver is online.
   useEffect(() => {
-    if (!authToken || authUser?.role !== "driver" || authUser?.approval_status !== "approved") return;
+    if (!authToken || authUser?.role !== "driver") return;
     let active = true;
     const loadOrders = async () => {
       try {
