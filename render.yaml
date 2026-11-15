@@ -1,0 +1,30 @@
+services:
+  - type: web
+    name: taxi-lider-api
+    runtime: node
+    plan: free
+    region: frankfurt
+    rootDir: server
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: taxi-lider-db
+          property: connectionString
+      - key: JWT_SECRET
+        generateValue: true
+      - key: ADMIN_SETUP_KEY
+        generateValue: true
+      - key: CORS_ORIGIN
+        value: "*"
+
+databases:
+  - name: taxi-lider-db
+    plan: free
+    region: frankfurt
+    databaseName: taxi_lider
+    user: taxi_lider
