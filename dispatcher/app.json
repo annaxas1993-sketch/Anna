@@ -2,15 +2,16 @@
   "expo": {
     "name": "TAXI LIDER Դիսպետչեր",
     "slug": "taxi-lider-dispatcher",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "orientation": "portrait",
-    "userInterfaceStyle": "dark",
+    "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "android": {
       "package": "am.axas.dispatcher",
       "versionCode": 1,
       "label": "TAXI LIDER Դիսպետչեր",
-      "permissions": ["INTERNET"]
+      "permissions": ["INTERNET"],
+      "backgroundColor": "#f3f5fa"
     }
   }
 }
