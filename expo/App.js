@@ -266,7 +266,57 @@ setTimeout(()=>{map.invalidateSize();if(window.ReactNativeWebView)window.ReactNa
     catch (e) { Alert.alert("Պատվերի սխալ", e.message); }
   };
 
-  const renderOrders = () => <><Text style={styles.pageTitle}>Պատվերներ</Text><Text style={styles.pageSubtitle}>Նոր առաջարկներ և ընթացիկ ուղևորություններ</Text>{!authUser ? <View style={styles.emptyCard}><Text style={styles.emptyTitle}>Մուտք գործիր վարորդի հաշվով</Text><TouchableOpacity style={styles.outlineButton} onPress={()=>{setTab("profile");setProfileSection("login")}}><Text style={styles.outlineButtonText}>ՄՈՒՏՔ ԳՈՐԾԵԼ</Text></TouchableOpacity></View> : authUser.approval_status !== "approved" ? <View style={styles.infoCard}><Text style={styles.infoTitle}>Սպասում է հաստատման</Text><Text style={styles.infoText}>Դիսպետչերը պետք է հաստատի քո հաշիվը, մինչև պատվերներ ստանալը։</Text></View> : <><Text style={styles.sectionTitle}>ՆՈՐ ՊԱՏՎԵՐՆԵՐ ({availableOrders.length})</Text>{availableOrders.map(o=><View key={o.id} style={[styles.infoCard,{marginTop:10}]}><Text style={styles.infoTitle}>Վերցնել՝ {o.pickup_address}</Text><Text style={styles.infoText}>Ուղղություն՝ {o.destination_address}</Text><Text style={styles.infoText}>Ուղևոր՝ {o.passenger_name||"Հաճախորդ"}</Text><TouchableOpacity onPress={()=>acceptOrder(o.id)} style={[styles.outlineButton,{backgroundColor:"#20D6A0"}]}><Text style={[styles.outlineButtonText,{color:"#06251B"}]}>ԸՆԴՈՒՆԵԼ ՊԱՏՎԵՐԸ</Text></TouchableOpacity></View>)}<Text style={[styles.sectionTitle,{marginTop:20}]}>ԻՄ ԸՆԹԱՑԻԿ ՊԱՏՎԵՐՆԵՐԸ</Text>{myOrders.filter(o=>["accepted","arrived","started"].includes(o.status)).map(o=><View key={o.id} style={[styles.infoCard,{marginTop:10}]}><Text style={styles.infoTitle}>Ուղղություն՝ {o.destination_address}</Text><Text style={styles.infoText}>Վերցնել՝ {o.pickup_address}</Text><Text style={styles.infoText}>Ուղևոր՝ {o.passenger_name||"Հաճախորդ"} · {o.passenger_phone||""}</Text><CustomerCallButton phone={o.passenger_phone}/>{o.status==="accepted"?<TouchableOpacity style={styles.outlineButton} onPress={()=>updateOrderStatus(o.id,"arrived")}><Text style={styles.outlineButtonText}>ԺԱՄԱՆԵԼ ԵՄ</Text></TouchableOpacity>:null}{o.status==="arrived"?<TouchableOpacity style={styles.outlineButton} onPress={()=>updateOrderStatus(o.id,"started")}><Text style={styles.outlineButtonText}>ՍԿՍԵԼ ՈՒՂԵՎՈՐՈՒԹՅՈՒՆԸ</Text></TouchableOpacity>:null}{o.status==="started"?<TouchableOpacity style={styles.outlineButton} onPress={()=>updateOrderStatus(o.id,"completed")}><Text style={styles.outlineButtonText}>ԱՎԱՐՏԵԼ ՊԱՏՎԵՐԸ</Text></TouchableOpacity>:null}</View>)}{!availableOrders.length&&!myOrders.some(o=>["accepted","arrived","started"].includes(o.status))?<View style={styles.emptyCard}><Text style={styles.emptyTitle}>Այս պահին պատվերներ չկան</Text><Text style={styles.emptyText}>Նոր պատվերները ինքնաբերաբար կթարմացվեն։</Text></View>:null}</>};
+  const renderOrders = () => (
+    <>
+      <Text style={styles.pageTitle}>Պատվերներ</Text>
+      <Text style={styles.pageSubtitle}>Նոր առաջարկներ և ընթացիկ ուղևորություններ</Text>
+      {!authUser ? (
+        <View style={styles.emptyCard}>
+          <Text style={styles.emptyTitle}>Մուտք գործիր վարորդի հաշվով</Text>
+          <TouchableOpacity style={styles.outlineButton} onPress={() => { setTab("profile"); setProfileSection("login"); }}>
+            <Text style={styles.outlineButtonText}>ՄՈՒՏՔ ԳՈՐԾԵԼ</Text>
+          </TouchableOpacity>
+        </View>
+      ) : authUser.approval_status !== "approved" ? (
+        <View style={styles.infoCard}>
+          <Text style={styles.infoTitle}>Սպասում է հաստատման</Text>
+          <Text style={styles.infoText}>Դիսպետչերը պետք է հաստատի քո հաշիվը, մինչև պատվերներ ստանալը։</Text>
+        </View>
+      ) : (
+        <>
+          <Text style={styles.sectionTitle}>ՆՈՐ ՊԱՏՎԵՐՆԵՐ ({availableOrders.length})</Text>
+          {availableOrders.map(o => (
+            <View key={o.id} style={[styles.infoCard, { marginTop: 10 }]}>
+              <Text style={styles.infoTitle}>Վերցնել՝ {o.pickup_address}</Text>
+              <Text style={styles.infoText}>Ուղղություն՝ {o.destination_address}</Text>
+              <Text style={styles.infoText}>Ուղևոր՝ {o.passenger_name || "Հաճախորդ"}</Text>
+              <TouchableOpacity onPress={() => acceptOrder(o.id)} style={[styles.outlineButton, { backgroundColor: "#20D6A0" }]}>
+                <Text style={[styles.outlineButtonText, { color: "#06251B" }]}>ԸՆԴՈՒՆԵԼ ՊԱՏՎԵՐԸ</Text>
+              </TouchableOpacity>
+            </View>
+          ))}
+          <Text style={[styles.sectionTitle, { marginTop: 20 }]}>ԻՄ ԸՆԹԱՑԻԿ ՊԱՏՎԵՐՆԵՐԸ</Text>
+          {myOrders.filter(o => ["accepted", "arrived", "started"].includes(o.status)).map(o => (
+            <View key={o.id} style={[styles.infoCard, { marginTop: 10 }]}>
+              <Text style={styles.infoTitle}>Ուղղություն՝ {o.destination_address}</Text>
+              <Text style={styles.infoText}>Վերցնել՝ {o.pickup_address}</Text>
+              <Text style={styles.infoText}>Ուղևոր՝ {o.passenger_name || "Հաճախորդ"} · {o.passenger_phone || ""}</Text>
+              <CustomerCallButton phone={o.passenger_phone} />
+              {o.status === "accepted" ? <TouchableOpacity style={styles.outlineButton} onPress={() => updateOrderStatus(o.id, "arrived")}><Text style={styles.outlineButtonText}>ԺԱՄԱՆԵԼ ԵՄ</Text></TouchableOpacity> : null}
+              {o.status === "arrived" ? <TouchableOpacity style={styles.outlineButton} onPress={() => updateOrderStatus(o.id, "started")}><Text style={styles.outlineButtonText}>ՍԿՍԵԼ ՈՒՂԵՎՈՐՈՒԹՅՈՒՆԸ</Text></TouchableOpacity> : null}
+              {o.status === "started" ? <TouchableOpacity style={styles.outlineButton} onPress={() => updateOrderStatus(o.id, "completed")}><Text style={styles.outlineButtonText}>ԱՎԱՐՏԵԼ ՊԱՏՎԵՐԸ</Text></TouchableOpacity> : null}
+            </View>
+          ))}
+          {!availableOrders.length && !myOrders.some(o => ["accepted", "arrived", "started"].includes(o.status)) ? (
+            <View style={styles.emptyCard}>
+              <Text style={styles.emptyTitle}>Այս պահին պատվերներ չկան</Text>
+              <Text style={styles.emptyText}>Նոր պատվերները ինքնաբերաբար կթարմացվեն։</Text>
+            </View>
+          ) : null}
+        </>
+      )}
+    </>
+  );
   const renderTasks = () =><><Text style={styles.pageTitle}>Առաջադրանքներ</Text><Text style={styles.pageSubtitle}>Բոնուսներ և օրվա նպատակներ</Text><View style={styles.infoCard}><Text style={styles.infoTitle}>Օրվա նպատակ</Text><Text style={styles.infoText}>Առաջադրանքները և բոնուսները կցուցադրվեն այստեղ՝ սերվերի միացումից հետո։</Text><View style={styles.progressTrack}><View style={styles.progressFill}/></View><Text style={styles.mutedSmall}>0 / 10 ուղևորություն</Text></View><Row title="Շաբաթական բոնուս" detail="Առաջընթացը դեռ հասանելի չէ" icon="★"/><Row title="Ակտիվության միավորներ" detail="Կհաշվարկվեն ուղևորություններից" icon="↗"/></>;
   const renderBalance = () =><><Text style={styles.pageTitle}>Հաշվեկշիռ</Text><Text style={styles.pageSubtitle}>Եկամուտներ և վճարումների պատմություն</Text><View style={styles.balanceCard}><Text style={styles.balanceCaption}>ԸՆԴՀԱՆՈՒՐ ՀԱՇՎԵԿՇԻՌ</Text><Text style={styles.balanceValue}>0 ֏</Text><Text style={styles.balanceFoot}>Ցուցադրական տվյալներ</Text></View><View style={styles.sectionHeading}><Text style={styles.sectionTitle}>ԳՈՐԾԱՐՔՆԵՐ</Text></View><View style={styles.emptyCard}><Text style={styles.emptyTitle}>Գործարքներ դեռ չկան</Text><Text style={styles.emptyText}>Ուղևորությունների վճարումները կերևան այստեղ։</Text></View></>;
 
