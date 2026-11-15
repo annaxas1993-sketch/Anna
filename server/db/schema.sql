@@ -78,3 +78,16 @@ DO $$ BEGIN
   END IF;
 END $$;
 CREATE INDEX IF NOT EXISTS orders_priority_dispatch_idx ON orders(priority,created_at) WHERE status='searching' AND dispatch_enabled=TRUE;
+
+
+-- Daily driver vehicle safety inspections visible to dispatchers
+CREATE TABLE IF NOT EXISTS driver_vehicle_checks (
+ id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+ driver_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+ checks JSONB NOT NULL,
+ note VARCHAR(500),
+ status VARCHAR(16) NOT NULL CHECK(status IN ('passed','attention')),
+ created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS driver_vehicle_checks_driver_created_idx
+ ON driver_vehicle_checks(driver_id,created_at DESC);
