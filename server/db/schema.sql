@@ -29,3 +29,13 @@ CREATE TABLE IF NOT EXISTS orders (
 );
 CREATE INDEX IF NOT EXISTS orders_status_created_idx ON orders(status,created_at DESC);
 CREATE INDEX IF NOT EXISTS orders_driver_created_idx ON orders(driver_id,created_at DESC);
+
+
+-- Driver onboarding and dispatcher approval
+ALTER TABLE users ADD COLUMN IF NOT EXISTS driver_license_number VARCHAR(32);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS approval_status VARCHAR(16) NOT NULL DEFAULT 'approved';
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='users_approval_status_check') THEN
+    ALTER TABLE users ADD CONSTRAINT users_approval_status_check CHECK (approval_status IN ('pending','approved','rejected'));
+  END IF;
+END $$;
