@@ -24,6 +24,7 @@ export default function App() {
   const [tab, setTab] = useState("home");
   const [location, setLocation] = useState(DEFAULT_LOCATION);
   const [gpsReady, setGpsReady] = useState(false);
+  const [mapReady, setMapReady] = useState(false);
   const [speedKmh, setSpeedKmh] = useState(0);
   const [profileSection, setProfileSection] = useState("");
   const [soundEnabled, setSoundEnabled] = useState(true);
@@ -64,30 +65,53 @@ setTimeout(()=>map.invalidateSize(),500);</script></body></html>`, []);
   useEffect(() => {
     let active = true;
     let subscription;
+    const applyPosition = (position) => {
+      if (!active || !position?.coords) return;
+      const point = { latitude: position.coords.latitude, longitude: position.coords.longitude };
+      setLocation(point);
+      setGpsReady(true);
+      setSpeedKmh(Math.max(0, Math.round((position.coords.speed || 0) * 3.6)));
+    };
     (async () => {
       const permission = await Location.requestForegroundPermissionsAsync();
-      if (permission.status !== "granted" || !active) return;
-      const current = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
       if (!active) return;
-      const next = { latitude: current.coords.latitude, longitude: current.coords.longitude };
-      setLocation(next);
-      setGpsReady(true);
-      setSpeedKmh(Math.max(0,Math.round((current.coords.speed || 0)*3.6)));
-      mapRef.current?.injectJavaScript(`window.axasSetPosition && window.axasSetPosition(${next.latitude},${next.longitude},${current.coords.heading ?? 0}); true;`);
+      if (permission.status !== "granted") {
+        Alert.alert("GPS-ի թույլտվություն", "Միացրու AXAS Driver-ի տեղադրության թույլտվությունը, որպեսզի քարտեզը ցույց տա վարորդի իրական դիրքը։");
+        return;
+      }
+      // Show the last known GPS fix immediately while a fresh fix is acquired.
+      try {
+        const last = await Location.getLastKnownPositionAsync({ maxAge: 120000, requiredAccuracy: 1500 });
+        if (last) applyPosition(last);
+      } catch (_) {}
+      // Start continuous GPS updates before requesting a fresh one.
       subscription = await Location.watchPositionAsync(
-        { accuracy: Location.Accuracy.High, timeInterval: 3000, distanceInterval: 5 },
-        (position) => {
-          if (!active) return;
-          const point = { latitude: position.coords.latitude, longitude: position.coords.longitude };
-          setLocation(point);
-          setGpsReady(true);
-          setSpeedKmh(Math.max(0,Math.round((position.coords.speed || 0)*3.6)));
-          mapRef.current?.injectJavaScript(`window.axasSetPosition && window.axasSetPosition(${point.latitude},${point.longitude},${position.coords.heading ?? 0}); true;`);
-        }
+        { accuracy: Location.Accuracy.High, timeInterval: 2000, distanceInterval: 2 },
+        applyPosition
       );
-    })().catch(() => {});
+      try {
+        const current = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.High,
+          mayShowUserSettingsDialog: true
+        });
+        applyPosition(current);
+      } catch (_) {
+        // The watcher can still deliver the first accurate GPS position.
+      }
+    })().catch(() => {
+      if (active) Alert.alert("GPS-ի սխալ", "Չհաջողվեց ստանալ տեղադրությունը։ Միացրու հեռախոսի GPS-ը և փորձիր կրկին։");
+    });
     return () => { active = false; subscription?.remove(); };
   }, []);
+
+  // Do not send GPS coordinates until the map's JavaScript has finished loading.
+  // This prevents the first location update from being lost during WebView startup.
+  useEffect(() => {
+    if (!mapReady || !gpsReady) return;
+    mapRef.current?.injectJavaScript(
+      `window.axasSetPosition && window.axasSetPosition(${location.latitude},${location.longitude},0); window.axasLocate && window.axasLocate(); true;`
+    );
+  }, [mapReady, gpsReady, location.latitude, location.longitude]);
 
   const toggleOnline = () => {
     setOnline(v => !v);
@@ -114,7 +138,7 @@ setTimeout(()=>map.invalidateSize(),500);</script></body></html>`, []);
 
   const screens = {orders:renderOrders, tasks:renderTasks, balance:renderBalance, profile:renderProfile};
   return <SafeAreaView style={styles.safe}><StatusBar barStyle="light-content" backgroundColor="#080E19"/>
-    {tab === "home" ? <View style={styles.fullMap}><WebView ref={mapRef} style={StyleSheet.absoluteFillObject} source={{ html: mapHtml, baseUrl: "https://localhost" }} originWhitelist={["*"]} javaScriptEnabled domStorageEnabled mixedContentMode="always" setSupportMultipleWindows={false} cacheEnabled onLoadEnd={() => mapRef.current?.injectJavaScript("window.axasLocate && window.axasLocate(); true;")} /><View style={styles.addressSearchWrap}><View style={styles.addressSearchRow}><TextInput value={addressQuery} onChangeText={setAddressQuery} onSubmitEditing={searchAddress} returnKeyType="search" placeholder="Գրիր հասցեն կամ փողոցը..." placeholderTextColor="#8492A8" style={styles.addressInput}/><TouchableOpacity style={styles.addressSearchButton} onPress={searchAddress} disabled={addressLoading}>{addressLoading?<ActivityIndicator color="#061810"/>:<Text style={styles.addressSearchButtonText}>ԳՏՆԵԼ</Text>}</TouchableOpacity></View>{addressResults.length>0?<View style={styles.addressResults}>{addressResults.map(item=><TouchableOpacity key={String(item.id)} style={styles.addressResult} onPress={()=>navigateToAddress(item)}><Text numberOfLines={2} style={styles.addressResultText}>{item.name}</Text></TouchableOpacity>)}</View>:null}</View><View style={styles.mapTopOverlay}><View style={styles.mapStyleSwitch}><TouchableOpacity onPress={() => mapRef.current?.injectJavaScript("window.axasMapStyle && window.axasMapStyle(\u0027satellite\u0027); true;")} style={styles.mapStyleButton}><Text style={styles.mapStyleText}>ԱՐԲԱՆՅԱԿԱՅԻՆ</Text></TouchableOpacity><TouchableOpacity onPress={() => mapRef.current?.injectJavaScript("window.axasMapStyle && window.axasMapStyle(\u0027light\u0027); true;")} style={styles.mapStyleButton}><Text style={styles.mapStyleText}>ՍՈՎՈՐԱԿԱՆ</Text></TouchableOpacity></View><TouchableOpacity onPress={toggleOnline} style={[styles.mapOnlineButton, online && styles.mapOnlineButtonOn]}><View style={[styles.tinyDot, online && styles.statusDotOn]}/><Text style={styles.mapOnlineText}>{online ? "ԱՌՑԱՆՑ" : "ԱՆՑԱՆՑ"}</Text></TouchableOpacity></View><View style={styles.speedBadge}><Text style={styles.speedValue}>{speedKmh}</Text><Text style={styles.speedUnit}>կմ/ժ</Text></View><View style={styles.mapAttribution}><Text style={styles.mapAttributionText}>© OpenStreetMap contributors © CARTO</Text></View><View style={styles.mapControlsFull}><TouchableOpacity style={styles.mapControl} onPress={() => zoomMap(0.55)}><Text style={styles.mapControlText}>+</Text></TouchableOpacity><TouchableOpacity style={styles.mapControl} onPress={() => zoomMap(1.8)}><Text style={styles.mapControlText}>−</Text></TouchableOpacity><TouchableOpacity style={styles.mapControl} onPress={() => mapRef.current?.injectJavaScript("window.axasLocate && window.axasLocate(); true;")}><Text style={styles.mapControlText}>◎</Text></TouchableOpacity></View></View> : <><View style={styles.topBar}><Text style={styles.brand}>TAXI <Text style={styles.brandAccent}>LIDER</Text></Text><View style={[styles.topStatus, online && styles.topStatusOn]}><View style={[styles.tinyDot, online && styles.statusDotOn]}/><Text style={styles.topStatusText}>{online ? "Առցանց" : "Անցանց"}</Text></View></View><ScrollView style={styles.scroll} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>{screens[tab]()}</ScrollView></>}
+    {tab === "home" ? <View style={styles.fullMap}><WebView ref={mapRef} style={StyleSheet.absoluteFillObject} source={{ html: mapHtml, baseUrl: "https://localhost" }} originWhitelist={["*"]} javaScriptEnabled domStorageEnabled mixedContentMode="always" setSupportMultipleWindows={false} cacheEnabled onLoadEnd={() => setMapReady(true)} /><View style={styles.addressSearchWrap}><View style={styles.addressSearchRow}><TextInput value={addressQuery} onChangeText={setAddressQuery} onSubmitEditing={searchAddress} returnKeyType="search" placeholder="Գրիր հասցեն կամ փողոցը..." placeholderTextColor="#8492A8" style={styles.addressInput}/><TouchableOpacity style={styles.addressSearchButton} onPress={searchAddress} disabled={addressLoading}>{addressLoading?<ActivityIndicator color="#061810"/>:<Text style={styles.addressSearchButtonText}>ԳՏՆԵԼ</Text>}</TouchableOpacity></View>{addressResults.length>0?<View style={styles.addressResults}>{addressResults.map(item=><TouchableOpacity key={String(item.id)} style={styles.addressResult} onPress={()=>navigateToAddress(item)}><Text numberOfLines={2} style={styles.addressResultText}>{item.name}</Text></TouchableOpacity>)}</View>:null}</View><View style={styles.mapTopOverlay}><View style={styles.mapStyleSwitch}><TouchableOpacity onPress={() => mapRef.current?.injectJavaScript("window.axasMapStyle && window.axasMapStyle(\u0027satellite\u0027); true;")} style={styles.mapStyleButton}><Text style={styles.mapStyleText}>ԱՐԲԱՆՅԱԿԱՅԻՆ</Text></TouchableOpacity><TouchableOpacity onPress={() => mapRef.current?.injectJavaScript("window.axasMapStyle && window.axasMapStyle(\u0027light\u0027); true;")} style={styles.mapStyleButton}><Text style={styles.mapStyleText}>ՍՈՎՈՐԱԿԱՆ</Text></TouchableOpacity></View><TouchableOpacity onPress={toggleOnline} style={[styles.mapOnlineButton, online && styles.mapOnlineButtonOn]}><View style={[styles.tinyDot, online && styles.statusDotOn]}/><Text style={styles.mapOnlineText}>{online ? "ԱՌՑԱՆՑ" : "ԱՆՑԱՆՑ"}</Text></TouchableOpacity></View><View style={styles.speedBadge}><Text style={styles.speedValue}>{speedKmh}</Text><Text style={styles.speedUnit}>կմ/ժ</Text></View><View style={styles.mapAttribution}><Text style={styles.mapAttributionText}>© OpenStreetMap contributors © CARTO</Text></View><View style={styles.mapControlsFull}><TouchableOpacity style={styles.mapControl} onPress={() => zoomMap(0.55)}><Text style={styles.mapControlText}>+</Text></TouchableOpacity><TouchableOpacity style={styles.mapControl} onPress={() => zoomMap(1.8)}><Text style={styles.mapControlText}>−</Text></TouchableOpacity><TouchableOpacity style={styles.mapControl} onPress={() => mapRef.current?.injectJavaScript("window.axasLocate && window.axasLocate(); true;")}><Text style={styles.mapControlText}>◎</Text></TouchableOpacity></View></View> : <><View style={styles.topBar}><Text style={styles.brand}>TAXI <Text style={styles.brandAccent}>LIDER</Text></Text><View style={[styles.topStatus, online && styles.topStatusOn]}><View style={[styles.tinyDot, online && styles.statusDotOn]}/><Text style={styles.topStatusText}>{online ? "Առցանց" : "Անցանց"}</Text></View></View><ScrollView style={styles.scroll} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>{screens[tab]()}</ScrollView></>}
     <View style={styles.tabBar}>{TABS.map(item =><TouchableOpacity key={item.id} style={[styles.tabItem, item.id==="tasks" && styles.tabCenter]} onPress={() => setTab(item.id)}>{item.id==="tasks" ? <View style={styles.tabCenterIcon}><Text style={{fontSize:22,color:"#061810",fontWeight:"900"}}>{item.icon}</Text></View> : <Text style={[styles.tabIcon, tab===item.id && styles.tabActive]}>{item.icon}</Text>}<Text style={[styles.tabLabel, tab===item.id && styles.tabActive]}>{item.label}</Text>{tab===item.id && <View style={styles.tabIndicator}/>}</TouchableOpacity>)}</View></SafeAreaView>;
 }
 
