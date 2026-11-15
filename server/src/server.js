@@ -192,8 +192,8 @@ app.patch("/api/admin/orders/:id/assign",auth,roles("admin"),wrap(async(req,res)
  io.emit("order:updated",r.rows[0]);io.to("user:"+b.driver_id).emit("order:assigned",r.rows[0]);res.json({order:r.rows[0]});
 }));
 app.patch("/api/admin/orders/:id/status",auth,roles("admin"),wrap(async(req,res)=>{
- const status=z.enum(["cancelled","completed"]).parse(req.body.status);
- const r=await db.query("UPDATE orders SET status=$1,completed_at=CASE WHEN $1='completed' THEN NOW() ELSE completed_at END WHERE id=$2 AND status NOT IN ('completed','cancelled') RETURNING *",[status,req.params.id]);
+ const status=z.enum(["cancelled","completed","rejected"]).parse(req.body.status);
+ const r=await db.query("UPDATE orders SET status=$1,dispatch_enabled=CASE WHEN $1 IN ('cancelled','rejected') THEN FALSE ELSE dispatch_enabled END,dispatch_status=CASE WHEN $1='rejected' THEN 'rejected' WHEN $1='cancelled' THEN 'cancelled' ELSE dispatch_status END,offered_driver_id=CASE WHEN $1 IN ('cancelled','rejected') THEN NULL ELSE offered_driver_id END,offer_expires_at=CASE WHEN $1 IN ('cancelled','rejected') THEN NULL ELSE offer_expires_at END,completed_at=CASE WHEN $1='completed' THEN NOW() ELSE completed_at END WHERE id=$2 AND status NOT IN ('completed','cancelled','rejected') RETURNING *",[status,req.params.id]);
  if(!r.rowCount)return res.status(409).json({error:"Պատվերի վիճակը հնարավոր չէ փոխել"});
  io.emit("order:updated",r.rows[0]);res.json({order:r.rows[0]});
 }));
