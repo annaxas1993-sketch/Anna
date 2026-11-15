@@ -81,9 +81,9 @@ app.post("/api/auth/register",wrap(async(req,res)=>{
 app.post("/api/auth/login",wrap(async(req,res)=>{
  const b=z.object({phone,password:z.string().min(1).max(100)}).parse(req.body),r=await db.query("SELECT * FROM users WHERE phone=$1",[b.phone]),u=r.rows[0];
  if(!u||!(await bcrypt.compare(b.password,u.password_hash)))return res.status(401).json({error:"Հեռախոսը կամ գաղտնաբառը սխալ է"});
- const user={id:u.id,name:u.name,phone:u.phone,role:u.role,car_model:u.car_model,plate_number:u.plate_number,driver_license_number:u.driver_license_number,approval_status:u.approval_status};res.json({user,token:sign(user)});
+ const user={id:u.id,name:u.name,phone:u.phone,role:u.role,car_model:u.car_model,plate_number:u.plate_number,driver_license_number:u.driver_license_number,approval_status:u.approval_status,driver_rating:u.driver_rating,driver_rejection_count:u.driver_rejection_count,driver_completion_count:u.driver_completion_count};res.json({user,token:sign(user)});
 }));
-app.get("/api/me",auth,wrap(async(req,res)=>{const r=await db.query("SELECT id,name,phone,role,car_model,plate_number,driver_license_number,approval_status,is_online,created_at FROM users WHERE id=$1",[req.user.sub]);if(!r.rowCount)return res.status(404).json({error:"User not found"});res.json({user:r.rows[0]});}));
+app.get("/api/me",auth,wrap(async(req,res)=>{const r=await db.query("SELECT id,name,phone,role,car_model,plate_number,driver_license_number,approval_status,is_online,driver_rating,driver_rejection_count,driver_completion_count,created_at FROM users WHERE id=$1",[req.user.sub]);if(!r.rowCount)return res.status(404).json({error:"User not found"});res.json({user:r.rows[0]});}));
 const driverApproved=wrap(async(req,res,next)=>{const r=await db.query("SELECT approval_status FROM users WHERE id=$1 AND role='driver'",[req.user.sub]);if(!r.rowCount||r.rows[0].approval_status!=="approved")return res.status(403).json({error:r.rows[0]?.approval_status==="rejected"?"Գրանցումը մերժվել է։ Կապվիր դիսպետչերի հետ։":"Հաշիվը սպասում է դիսպետչերի հաստատմանը։",approval_status:r.rows[0]?.approval_status||"pending"});next();});
 app.patch("/api/drivers/availability",auth,roles("driver"),driverApproved,wrap(async(req,res)=>{const online=z.boolean().parse(req.body.online);await db.query("UPDATE users SET is_online=$1 WHERE id=$2",[online,req.user.sub]);io.emit("driver:availability",{driverId:req.user.sub,online});res.json({online});}));
 app.post("/api/drivers/location",auth,roles("driver"),driverApproved,wrap(async(req,res)=>{const p=coords.parse(req.body);await db.query("INSERT INTO driver_locations(driver_id,lat,lng,updated_at) VALUES($1,$2,$3,NOW()) ON CONFLICT(driver_id) DO UPDATE SET lat=EXCLUDED.lat,lng=EXCLUDED.lng,updated_at=NOW()",[req.user.sub,p.lat,p.lng]);io.to("admins").emit("driver:location",{driverId:req.user.sub,...p});res.json({saved:true});}));
@@ -117,7 +117,37 @@ app.post("/api/orders",auth,roles("passenger"),wrap(async(req,res)=>{
 }));
 app.get("/api/orders/available",auth,roles("driver"),driverApproved,wrap(async(req,res)=>{const r=await db.query("SELECT o.*,COALESCE(o.passenger_name,u.name) AS passenger_name,COALESCE(o.passenger_phone,u.phone) AS passenger_phone FROM orders o LEFT JOIN users u ON u.id=o.passenger_id WHERE o.status='searching' AND o.dispatch_enabled=TRUE AND o.offered_driver_id=$1 AND o.offer_expires_at>NOW() ORDER BY CASE o.priority WHEN 'urgent' THEN 0 ELSE 1 END,o.created_at DESC LIMIT 10",[req.user.sub]);res.json({orders:r.rows});}));
 app.post("/api/orders/:id/accept",auth,roles("driver"),driverApproved,wrap(async(req,res)=>{const r=await db.query("UPDATE orders SET driver_id=$1,status='accepted',accepted_at=NOW(),dispatch_enabled=FALSE,dispatch_status='accepted',offered_driver_id=NULL,offer_expires_at=NULL WHERE id=$2 AND status='searching' AND dispatch_enabled=TRUE AND offered_driver_id=$1 AND offer_expires_at>NOW() AND EXISTS(SELECT 1 FROM users WHERE id=$1 AND role='driver' AND approval_status='approved' AND is_online=TRUE) RETURNING *",[req.user.sub,req.params.id]);if(!r.rowCount)return res.status(409).json({error:"Պատվերն արդեն վերցված է կամ հասանելի չէ"});io.emit("order:updated",r.rows[0]);res.json({order:r.rows[0]});}));
-app.post("/api/orders/:id/status",auth,roles("driver"),driverApproved,wrap(async(req,res)=>{const status=z.enum(["arrived","started","completed","cancelled"]).parse(req.body.status);const r=await db.query("UPDATE orders SET status=$1,started_at=CASE WHEN $1='started' THEN NOW() ELSE started_at END,completed_at=CASE WHEN $1='completed' THEN NOW() ELSE completed_at END WHERE id=$2 AND driver_id=$3 AND status IN ('accepted','arrived','started') RETURNING *",[status,req.params.id,req.user.sub]);if(!r.rowCount)return res.status(409).json({error:"Հնարավոր չէ փոխել պատվերի վիճակը"});io.emit("order:updated",r.rows[0]);res.json({order:r.rows[0]});}));
+app.post("/api/orders/:id/status",auth,roles("driver"),driverApproved,wrap(async(req,res)=>{
+ const status=z.enum(["arrived","started","completed","cancelled"]).parse(req.body.status);
+ const client=await db.pool.connect();let order,driver;
+ try{
+  await client.query("BEGIN");
+  const r=await client.query("UPDATE orders SET status=$1,started_at=CASE WHEN $1='started' THEN NOW() ELSE started_at END,completed_at=CASE WHEN $1='completed' THEN NOW() ELSE completed_at END WHERE id=$2 AND driver_id=$3 AND status IN ('accepted','arrived','started') RETURNING *",[status,req.params.id,req.user.sub]);
+  if(!r.rowCount){await client.query("ROLLBACK");return res.status(409).json({error:"Հնարավոր չէ փոխել պատվերի վիճակը"});}
+  order=r.rows[0];
+  if(status==="completed"){
+   const u=await client.query("UPDATE users SET driver_completion_count=driver_completion_count+1,driver_rating=driver_rating+CASE WHEN (driver_completion_count+1)%2=0 THEN 0.5 ELSE 0 END WHERE id=$1 RETURNING driver_rating,driver_rejection_count,driver_completion_count",[req.user.sub]);
+   driver=u.rows[0];
+  }
+  await client.query("COMMIT");
+ }catch(error){await client.query("ROLLBACK");throw error;}finally{client.release();}
+ io.emit("order:updated",order);res.json({order,driver});
+}));
+app.post("/api/orders/:id/reject",auth,roles("driver"),driverApproved,wrap(async(req,res)=>{
+ const client=await db.pool.connect();let order,driver;
+ try{
+  await client.query("BEGIN");
+  const r=await client.query("UPDATE orders SET tried_driver_ids=array_append(COALESCE(tried_driver_ids,ARRAY[]::uuid[]),$1::uuid),offered_driver_id=NULL,offer_expires_at=NULL,dispatch_status='waiting' WHERE id=$2 AND status='searching' AND dispatch_enabled=TRUE AND offered_driver_id=$1 AND offer_expires_at>NOW() RETURNING *",[req.user.sub,req.params.id]);
+  if(!r.rowCount){await client.query("ROLLBACK");return res.status(409).json({error:"Պատվերի առաջարկն այլևս ակտիվ չէ"});}
+  order=r.rows[0];
+  const u=await client.query("UPDATE users SET driver_rejection_count=driver_rejection_count+1,driver_rating=GREATEST(0,driver_rating-CASE WHEN (driver_rejection_count+1)%2=0 THEN 1 ELSE 0 END) WHERE id=$1 RETURNING driver_rating,driver_rejection_count,driver_completion_count",[req.user.sub]);
+  driver=u.rows[0];
+  await client.query("COMMIT");
+ }catch(error){await client.query("ROLLBACK");throw error;}finally{client.release();}
+ io.to("admins").emit("order:dispatch",{orderId:order.id,status:"rejected",driverId:req.user.sub});
+ res.json({order,driver});
+ dispatchNext(order.id).catch(error=>console.error("Dispatch after driver rejection failed",error));
+}));
 app.get("/api/orders/mine",auth,wrap(async(req,res)=>{const col=req.user.role==="driver"?"driver_id":"passenger_id";const r=await db.query(`SELECT o.*,u.name AS passenger_name,u.phone AS passenger_phone FROM orders o JOIN users u ON u.id=o.passenger_id WHERE o.${col}=$1 ORDER BY o.created_at DESC LIMIT 100`,[req.user.sub]);res.json({orders:r.rows});}));
 app.post("/api/admin/orders",auth,roles("admin"),wrap(async(req,res)=>{
  const b=z.object({passenger_name:z.string().min(2).max(80),passenger_phone:phone,pickup_address:z.string().min(3).max(240),destination_address:z.string().min(3).max(240),pickup:coords,destination:coords,note:z.string().max(500).optional(),priority:z.enum(["normal","urgent"]).default("normal")}).parse(req.body);
