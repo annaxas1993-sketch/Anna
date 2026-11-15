@@ -18,6 +18,14 @@ app.post("/api/setup/admin",wrap(async(req,res)=>{
  const hash=await bcrypt.hash(b.password,12),r=await db.query("INSERT INTO users(name,phone,password_hash,role) VALUES($1,$2,$3,'admin') RETURNING id,name,phone,role",[b.name,b.phone,hash]);
  res.status(201).json({user:r.rows[0],token:sign(r.rows[0])});
 }));
+app.post("/api/setup/admin/reset",wrap(async(req,res)=>{
+ if(!process.env.ADMIN_SETUP_KEY||req.headers["x-setup-key"]!==process.env.ADMIN_SETUP_KEY)return res.status(403).json({error:"Setup key is invalid"});
+ const b=z.object({phone,password:z.string().min(8).max(100)}).parse(req.body);
+ const hash=await bcrypt.hash(b.password,12);
+ const r=await db.query("UPDATE users SET password_hash=$1 WHERE phone=$2 AND role='admin' RETURNING id,name,phone,role",[hash,b.phone]);
+ if(!r.rowCount)return res.status(404).json({error:"Այս հեռախոսահամարով ադմին չի գտնվել"});
+ res.json({user:r.rows[0],token:sign(r.rows[0])});
+}));
 app.post("/api/auth/register",wrap(async(req,res)=>{
  const b=z.object({name:z.string().min(2).max(80),phone,password:z.string().min(8).max(100),role:z.enum(["driver","passenger"]),car_model:z.string().max(80).optional(),plate_number:z.string().max(24).optional()}).parse(req.body);
  const hash=await bcrypt.hash(b.password,12),r=await db.query("INSERT INTO users(name,phone,password_hash,role,car_model,plate_number) VALUES($1,$2,$3,$4,$5,$6) RETURNING id,name,phone,role,car_model,plate_number",[b.name,b.phone,hash,b.role,b.car_model||null,b.plate_number||null]);
