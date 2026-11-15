@@ -89,11 +89,20 @@ app.patch("/api/drivers/availability",auth,roles("driver"),driverApproved,wrap(a
 app.post("/api/drivers/location",auth,roles("driver"),driverApproved,wrap(async(req,res)=>{const p=coords.parse(req.body);await db.query("INSERT INTO driver_locations(driver_id,lat,lng,updated_at) VALUES($1,$2,$3,NOW()) ON CONFLICT(driver_id) DO UPDATE SET lat=EXCLUDED.lat,lng=EXCLUDED.lng,updated_at=NOW()",[req.user.sub,p.lat,p.lng]);io.to("admins").emit("driver:location",{driverId:req.user.sub,...p});res.json({saved:true});}));
 app.get("/api/drivers/vehicle-checks",auth,roles("driver"),wrap(async(req,res)=>{
  const r=await db.query("SELECT id,checks,note,status,created_at FROM driver_vehicle_checks WHERE driver_id=$1 ORDER BY created_at DESC LIMIT 20",[req.user.sub]);
- res.json({checks:r.rows});
+ const latest=r.rows[0]||null;
+ const dueAt=latest?.status==="passed"?new Date(new Date(latest.created_at).getTime()+15*86400000).toISOString():null;
+ const isDue=!latest||latest.status!=="passed"||Date.now()>=new Date(dueAt).getTime();
+ res.json({checks:r.rows,latest,dueAt,isDue,intervalDays:15});
 }));
 app.post("/api/drivers/vehicle-checks",auth,roles("driver"),driverApproved,wrap(async(req,res)=>{
  const checks=z.object({brakes:z.boolean(),tires:z.boolean(),lights:z.boolean(),signals:z.boolean(),mirrors:z.boolean(),seatbelts:z.boolean(),documents:z.boolean()}).parse(req.body.checks);
  const note=z.string().max(500).optional().parse(req.body.note||"");
+ const previous=await db.query("SELECT status,created_at FROM driver_vehicle_checks WHERE driver_id=$1 ORDER BY created_at DESC LIMIT 1",[req.user.sub]);
+ const last=previous.rows[0];
+ if(last?.status==="passed" && Date.now()<new Date(last.created_at).getTime()+15*86400000){
+   const nextAt=new Date(new Date(last.created_at).getTime()+15*86400000);
+   return res.status(429).json({error:"Հաջորդ պարտադիր ստուգումը հասանելի կլինի "+nextAt.toLocaleDateString("hy-AM"),nextCheckAt:nextAt.toISOString()});
+ }
  const status=Object.values(checks).every(Boolean)?"passed":"attention";
  if(status==="attention"&&!note.trim())return res.status(400).json({error:"Նկարագրիր հայտնաբերված խնդիրը"});
  const r=await db.query("INSERT INTO driver_vehicle_checks(driver_id,checks,note,status) VALUES($1,$2::jsonb,$3,$4) RETURNING id,checks,note,status,created_at",[req.user.sub,JSON.stringify(checks),note||null,status]);
@@ -130,7 +139,7 @@ app.post("/api/admin/drivers/:id/balance/topup",auth,roles("admin"),wrap(async(r
  }catch(error){await client.query("ROLLBACK");throw error;}finally{client.release();}
 }));
 app.get("/api/admin/vehicle-checks",auth,roles("admin"),wrap(async(req,res)=>{
- const r=await db.query("SELECT c.id,c.checks,c.note,c.status,c.created_at,u.id AS driver_id,u.name AS driver_name,u.phone,u.car_model,u.plate_number FROM driver_vehicle_checks c JOIN users u ON u.id=c.driver_id ORDER BY c.created_at DESC LIMIT 150");
+ const r=await db.query("SELECT u.id AS driver_id,u.name AS driver_name,u.phone,u.car_model,u.plate_number,c.id,c.checks,c.note,c.status,c.created_at,CASE WHEN c.id IS NULL OR c.status<>'passed' OR c.created_at<=NOW()-INTERVAL '15 days' THEN TRUE ELSE FALSE END AS is_due,CASE WHEN c.status='passed' THEN c.created_at+INTERVAL '15 days' ELSE NOW() END AS due_at FROM users u LEFT JOIN LATERAL (SELECT * FROM driver_vehicle_checks WHERE driver_id=u.id ORDER BY created_at DESC LIMIT 1) c ON TRUE WHERE u.role='driver' ORDER BY is_due DESC,c.created_at ASC NULLS FIRST");
  res.json({checks:r.rows});
 }));
 app.get("/api/admin/drivers",auth,roles("admin"),wrap(async(req,res)=>{const r=await db.query("SELECT u.id,u.name,u.phone,u.car_model,u.plate_number,u.driver_license_number,u.approval_status,u.is_online,u.balance,l.lat,l.lng,l.updated_at FROM users u LEFT JOIN driver_locations l ON l.driver_id=u.id WHERE u.role='driver' ORDER BY CASE u.approval_status WHEN 'pending' THEN 0 WHEN 'approved' THEN 1 ELSE 2 END,u.created_at DESC");res.json({drivers:r.rows});}));
