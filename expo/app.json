@@ -16,7 +16,8 @@
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-foreground.png",
         "backgroundColor": "#081321"
-      }
+      },
+      "versionCode": 1
     },
     "ios": {
       "supportsTablet": false
