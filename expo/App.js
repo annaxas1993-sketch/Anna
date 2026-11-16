@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState, useMemo } from "react";
-import { SafeAreaView, View, Text, StyleSheet, TouchableOpacity, StatusBar, ScrollView, Alert, Switch, BackHandler, TextInput, ActivityIndicator, AppState, Linking } from "react-native";
+import { SafeAreaView, View, Text, StyleSheet, TouchableOpacity, StatusBar, ScrollView, Alert, Switch, BackHandler, TextInput, ActivityIndicator, AppState, Linking, Animated, PanResponder } from "react-native";
 import { WebView } from "react-native-webview";
 import * as Location from "expo-location";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -87,6 +87,16 @@ export default function App() {
   const [availableOrders,setAvailableOrders]=useState([]);
   const [myOrders,setMyOrders]=useState([]);
   const mapRef = useRef(null);
+  const [sheetExpanded,setSheetExpanded]=useState(true);
+  const sheetAnim=useRef(new Animated.Value(1)).current;
+  const sheetPan=useRef(PanResponder.create({
+    onStartShouldSetPanResponder:()=>true,
+    onMoveShouldSetPanResponder:(_,g)=>Math.abs(g.dy)>5,
+    onPanResponderRelease:(_,g)=>{
+      if(g.dy < -35){setSheetExpanded(true);Animated.spring(sheetAnim,{toValue:1,useNativeDriver:false,bounciness:3}).start();}
+      else if(g.dy > 35){setSheetExpanded(false);Animated.spring(sheetAnim,{toValue:0,useNativeDriver:false,bounciness:3}).start();}
+    }
+  })).current;
   const destination = { latitude: location.latitude + 0.0065, longitude: location.longitude + 0.0075 };
   const apiRequest = async (path, options = {}) => {
     const response = await fetch(API_BASE + path, { ...options, headers: { "Content-Type": "application/json", ...(authToken ? { Authorization: "Bearer " + authToken } : {}), ...(options.headers || {}) } });
@@ -483,7 +493,9 @@ setTimeout(()=>{map.invalidateSize();if(window.ReactNativeWebView)window.ReactNa
     </View>
     {fareTripOrderId ? <View style={styles.mapTaximeterBadge}><Text style={styles.mapTaximeterLabel}>ՏԱՔՍՈՄԵՏՐ</Text><Text style={styles.mapTaximeterFare}>{calculateTaxiFare(fareDistanceMeters).toLocaleString("hy-AM")} ֏</Text><Text style={styles.mapTaximeterKm}>{(fareDistanceMeters/1000).toFixed(2)} կմ</Text></View> : null}
     <View style={styles.mapControlsFull}><TouchableOpacity style={styles.lightMapControl} onPress={() => zoomMap(0.55)}><Text style={styles.lightMapControlText}>＋</Text></TouchableOpacity><TouchableOpacity style={styles.lightMapControl} onPress={() => zoomMap(1.8)}><Text style={styles.lightMapControlText}>−</Text></TouchableOpacity><TouchableOpacity style={styles.lightMapControl} onPress={() => mapRef.current?.injectJavaScript("window.axasLocate && window.axasLocate(); true;")}><Text style={styles.lightMapControlText}>➤</Text></TouchableOpacity></View>
-    <View style={styles.driverBottomSheet}>
+    <Animated.View style={[styles.driverBottomSheet,{height:sheetAnim.interpolate({inputRange:[0,1],outputRange:[126,440]})}]}>
+      <View style={styles.sheetDragArea} {...sheetPan.panHandlers}><View style={styles.sheetDragHandle}/></View>
+      {sheetExpanded ? <> 
       <View style={styles.driverStatsRow}>
         <TouchableOpacity style={styles.driverStat} onPress={()=>{setTab("profile");setProfileSection("priority");}}><Text style={styles.driverStatLabel}>Առաջնահերթություն</Text><Text style={styles.driverStatValue}>＋{Number(authUser?.driver_priority ?? 20)}</Text></TouchableOpacity>
         <View style={styles.driverStatDivider}/>
@@ -491,8 +503,9 @@ setTimeout(()=>{map.invalidateSize();if(window.ReactNativeWebView)window.ReactNa
       </View>
       <TouchableOpacity style={styles.driverInfoTile} onPress={()=>setTab("orders")}><View style={{flex:1}}><Text style={styles.driverInfoTitle}>{availableOrders.length ? "Կան նոր պատվերներ" : "Այս պահին ակտիվ պատվերներ չկան"}</Text><Text style={styles.driverInfoSubtitle}>{availableOrders.length ? "Բացիր և ընդունիր հարմար պատվերը" : "Կտեղեկացնենք, երբ պատվերներ հայտնվեն"}</Text></View><Text style={styles.driverChevron}>›</Text></TouchableOpacity>
       <TouchableOpacity style={styles.driverInfoTile} onPress={()=>setTab("orders")}><View style={{flex:1}}><Text style={styles.driverInfoTitle}>Իմ ուղևորությունները</Text><Text style={styles.driverInfoSubtitle}>Ընթացիկ՝ {myOrders.filter(o=>["accepted","arrived","started"].includes(o.status)).length} · Նոր առաջարկներ՝ {availableOrders.length}</Text></View><Text style={styles.driverChevron}>›</Text></TouchableOpacity>
-      <TouchableOpacity onPress={toggleOnline} activeOpacity={0.88} style={[styles.goOnlineButton,online&&styles.goOnlineButtonActive]}><View style={styles.goOnlineCircle}><Text style={styles.goOnlineArrow}>{online ? "Ⅱ" : "➜"}</Text></View><View style={{flex:1,alignItems:"center"}}><Text style={styles.goOnlineSmall}>{online ? "Առցանց" : "Անցանց"}</Text><Text style={styles.goOnlineText}>{online ? "ԴՈՒՐՍ ԳԱԼ ԳԾԻՑ" : "ԴՈՒՐՍ ԳԱԼ ԳԻԾ"}</Text></View></TouchableOpacity>
-    </View></View> : <View style={{flex:1}}><View style={styles.topBar}><Text style={styles.brand}>TAXI <Text style={styles.brandAccent}>LIDER</Text></Text><View style={[styles.topStatus, online && styles.topStatusOn]}><View style={[styles.tinyDot, online && styles.statusDotOn]} /><Text style={styles.topStatusText}>{online ? "Առցանց" : "Անցանց"}</Text></View></View><ScrollView style={styles.scroll} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>{screens[tab]()}</ScrollView></View>}
+      </> : null}
+      <TouchableOpacity onPress={toggleOnline} activeOpacity={0.88} style={[styles.goOnlineButton, !sheetExpanded && styles.goOnlineButtonCompact,online&&styles.goOnlineButtonActive]}><View style={[styles.goOnlineCircle,!sheetExpanded&&styles.goOnlineCircleCompact]}><Text style={[styles.goOnlineArrow,!sheetExpanded&&styles.goOnlineArrowCompact]}>{online ? "Ⅱ" : "➜"}</Text></View><View style={{flex:1,alignItems:"center"}}><Text style={styles.goOnlineSmall}>{online ? "Առցանց" : "Անցանց"}</Text><Text style={[styles.goOnlineText,!sheetExpanded&&styles.goOnlineTextCompact]}>{online ? "ԴՈՒՐՍ ԳԱԼ ԳԾԻՑ" : "ԴՈՒՐՍ ԳԱԼ ԳԻԾ"}</Text></View></TouchableOpacity>
+    </Animated.View></View> : <View style={{flex:1}}><View style={styles.topBar}><Text style={styles.brand}>TAXI <Text style={styles.brandAccent}>LIDER</Text></Text><View style={[styles.topStatus, online && styles.topStatusOn]}><View style={[styles.tinyDot, online && styles.statusDotOn]} /><Text style={styles.topStatusText}>{online ? "Առցանց" : "Անցանց"}</Text></View></View><ScrollView style={styles.scroll} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>{screens[tab]()}</ScrollView></View>}
     <View style={styles.tabBar}>{TABS.map(item =><TouchableOpacity key={item.id} style={[styles.tabItem, item.id==="tasks" && styles.tabCenter]} onPress={() => setTab(item.id)}>{item.id==="tasks" ? <View style={styles.tabCenterIcon}><Text style={{fontSize:22,color:"#061810",fontWeight:"900"}}>{item.icon}</Text></View> : <Text style={[styles.tabIcon, tab===item.id && styles.tabActive]}>{item.icon}</Text>}<Text style={[styles.tabLabel, tab===item.id && styles.tabActive]}>{item.label}</Text>{tab===item.id && <View style={styles.tabIndicator}/>}</TouchableOpacity>)}</View></SafeAreaView>;
 }
 
@@ -506,7 +519,8 @@ const styles = StyleSheet.create({
   driverSettingsGlyph:{fontSize:30,color:"#111111"},
   lightMapControl:{width:54,height:54,borderRadius:27,backgroundColor:"#FFFFFF",alignItems:"center",justifyContent:"center",elevation:5,shadowColor:"#000",shadowOpacity:.12,shadowRadius:7},
   lightMapControlText:{fontSize:29,color:"#111111",fontWeight:"600"},
-  driverBottomSheet:{position:"absolute",left:0,right:0,bottom:0,backgroundColor:"#FFFFFF",borderTopLeftRadius:26,borderTopRightRadius:26,paddingHorizontal:22,paddingTop:17,paddingBottom:18,elevation:18,shadowColor:"#000",shadowOpacity:.13,shadowRadius:14},
+  driverBottomSheet:{position:"absolute",left:0,right:0,bottom:0,backgroundColor:"#FFFFFF",borderTopLeftRadius:26,borderTopRightRadius:26,paddingHorizontal:22,paddingTop:5,paddingBottom:12,elevation:18,shadowColor:"#000",shadowOpacity:.13,shadowRadius:14,overflow:"hidden"},
+  sheetDragArea:{height:24,alignItems:"center",justifyContent:"center"},sheetDragHandle:{width:42,height:5,borderRadius:3,backgroundColor:"#C9C9C9"},
   driverStatsRow:{flexDirection:"row",alignItems:"center",paddingBottom:16,marginBottom:12,borderBottomWidth:1,borderBottomColor:"#E6E6E6"},
   driverStat:{flex:1,paddingHorizontal:10},
   driverStatLabel:{fontSize:13,color:"#333333"},
@@ -518,6 +532,7 @@ const styles = StyleSheet.create({
   driverChevron:{fontSize:30,color:"#111111",marginLeft:10},
   goOnlineButton:{height:104,backgroundColor:"#FFE000",borderRadius:54,marginTop:6,flexDirection:"row",alignItems:"center",padding:7},
   goOnlineButtonActive:{backgroundColor:"#D7F3E4"},
+  goOnlineButtonCompact:{height:76,marginTop:0,padding:5},goOnlineCircleCompact:{width:64,height:64,borderRadius:32},goOnlineArrowCompact:{fontSize:34},goOnlineTextCompact:{fontSize:14},
   goOnlineCircle:{width:88,height:88,borderRadius:44,backgroundColor:"#FFFFFF",alignItems:"center",justifyContent:"center"},
   goOnlineArrow:{fontSize:45,color:"#111111",fontWeight:"700"},
   goOnlineSmall:{fontSize:13,color:"#111111"},
