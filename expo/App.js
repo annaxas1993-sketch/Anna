@@ -1,11 +1,12 @@
 import React, { useEffect, useRef, useState, useMemo } from "react";
-import { SafeAreaView, View, Text, StyleSheet, TouchableOpacity, StatusBar, ScrollView, Alert, Switch, BackHandler, TextInput, ActivityIndicator, AppState, Linking, Animated, PanResponder } from "react-native";
+import { SafeAreaView, View, Text, StyleSheet, TouchableOpacity, StatusBar, ScrollView, Alert, Switch, BackHandler, TextInput, ActivityIndicator, AppState, Linking, Animated, PanResponder, Dimensions } from "react-native";
 import { WebView } from "react-native-webview";
 import * as Location from "expo-location";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import Constants from "expo-constants";
 
 const API_BASE = "https://accepted-governmental-ppm-pre.trycloudflare.com";
+const SCREEN_HEIGHT = Dimensions.get("window").height;
 const DEFAULT_LOCATION = { latitude: 40.8128, longitude: 44.4883 };
 const TAXIMETER_BASE_FARE=400,TAXIMETER_INCLUDED_KM=2,TAXIMETER_EXTRA_KM_RATE=100;
 function distanceBetweenMeters(a,b){const rad=v=>v*Math.PI/180,dLat=rad(b.latitude-a.latitude),dLon=rad(b.longitude-a.longitude),x=Math.sin(dLat/2)**2+Math.cos(rad(a.latitude))*Math.cos(rad(b.latitude))*Math.sin(dLon/2)**2;return 6371000*2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x));}
@@ -502,7 +503,7 @@ setTimeout(()=>{map.invalidateSize(true);map.setView(marker.getLatLng(),16,{anim
     </View>
     {fareTripOrderId ? <View style={styles.mapTaximeterBadge}><Text style={styles.mapTaximeterLabel}>ՏԱՔՍՈՄԵՏՐ</Text><Text style={styles.mapTaximeterFare}>{calculateTaxiFare(fareDistanceMeters).toLocaleString("hy-AM")} ֏</Text><Text style={styles.mapTaximeterKm}>{(fareDistanceMeters/1000).toFixed(2)} կմ</Text></View> : null}
     <View style={styles.mapControlsFull}><TouchableOpacity style={styles.lightMapControl} onPress={() => zoomMap(0.55)}><Text style={styles.lightMapControlText}>＋</Text></TouchableOpacity><TouchableOpacity style={styles.lightMapControl} onPress={() => zoomMap(1.8)}><Text style={styles.lightMapControlText}>−</Text></TouchableOpacity><TouchableOpacity style={styles.lightMapControl} onPress={() => mapRef.current?.injectJavaScript("window.axasLocate && window.axasLocate(); true;")}><Text style={styles.lightMapControlText}>➤</Text></TouchableOpacity></View>
-    <Animated.View style={[styles.driverBottomSheet,{height:sheetAnim.interpolate({inputRange:[0,1],outputRange:[100,370]})}]}>
+    <Animated.View style={[styles.driverBottomSheet,{height:sheetAnim.interpolate({inputRange:[0,1],outputRange:[Math.max(112,SCREEN_HEIGHT*0.15),Math.min(420,SCREEN_HEIGHT*0.52)]})}]}>
       <View style={styles.sheetDragArea} {...sheetPan.panHandlers}><View style={styles.sheetDragHandle}/></View>
       {sheetExpanded ? <> 
       <View style={styles.driverStatsRow}>
@@ -526,8 +527,8 @@ const styles = StyleSheet.create({
   driverHomeHint:{fontSize:14,fontWeight:"600",color:"#222222",marginTop:2},
   driverSettingsButton:{width:58,height:58,borderRadius:29,backgroundColor:"#0B1728",alignItems:"center",justifyContent:"center",elevation:5,shadowColor:"#000",shadowOpacity:.12,shadowRadius:8},
   driverSettingsGlyph:{fontSize:30,color:"#F2F6FC"},
-  lightMapControl:{width:42,height:42,borderRadius:21,backgroundColor:"#2869D8",alignItems:"center",justifyContent:"center",borderWidth:1,borderColor:"#E6C900",elevation:5,shadowColor:"#000",shadowOpacity:.16,shadowRadius:7},
-  lightMapControlText:{fontSize:23,color:"#F2F6FC",fontWeight:"800"},
+  lightMapControl:{width:50,height:50,borderRadius:25,backgroundColor:"#2869D8",alignItems:"center",justifyContent:"center",borderWidth:1,borderColor:"#E6C900",elevation:5,shadowColor:"#000",shadowOpacity:.16,shadowRadius:7},
+  lightMapControlText:{fontSize:27,color:"#F2F6FC",fontWeight:"800"},
   driverBottomSheet:{position:"absolute",left:0,right:0,bottom:0,backgroundColor:"#0B1728",borderTopLeftRadius:26,borderTopRightRadius:26,paddingHorizontal:22,paddingTop:5,paddingBottom:12,elevation:18,shadowColor:"#000",shadowOpacity:.13,shadowRadius:14,overflow:"hidden"},
   sheetDragArea:{height:24,alignItems:"center",justifyContent:"center"},sheetDragHandle:{width:42,height:5,borderRadius:3,backgroundColor:"#36516F"},
   driverStatsRow:{flexDirection:"row",alignItems:"center",paddingBottom:16,marginBottom:12,borderBottomWidth:1,borderBottomColor:"#29415F"},
@@ -539,11 +540,11 @@ const styles = StyleSheet.create({
   driverInfoTitle:{fontSize:15,color:"#F2F6FC",fontWeight:"800"},
   driverInfoSubtitle:{fontSize:12,color:"#8FA3BD",marginTop:3},
   driverChevron:{fontSize:30,color:"#F2F6FC",marginLeft:10},
-  goOnlineButton:{height:78,backgroundColor:"#2869D8",borderRadius:42,marginTop:5,flexDirection:"row",alignItems:"center",padding:5},
+  goOnlineButton:{height:86,backgroundColor:"#2869D8",borderRadius:42,marginTop:5,flexDirection:"row",alignItems:"center",padding:5},
   goOnlineButtonActive:{backgroundColor:"#123D35"},
-  goOnlineButtonCompact:{height:62,marginTop:0,padding:4},goOnlineCircleCompact:{width:52,height:52,borderRadius:26},goOnlineArrowCompact:{fontSize:28},goOnlineTextCompact:{fontSize:12},
-  goOnlineCircle:{width:66,height:66,borderRadius:33,backgroundColor:"#0B1728",alignItems:"center",justifyContent:"center"},
-  goOnlineArrow:{fontSize:34,color:"#F2F6FC",fontWeight:"700"},
+  goOnlineButtonCompact:{height:70,marginTop:2,padding:5},goOnlineCircleCompact:{width:58,height:58,borderRadius:29},goOnlineArrowCompact:{fontSize:30},goOnlineTextCompact:{fontSize:13},
+  goOnlineCircle:{width:74,height:74,borderRadius:37,backgroundColor:"#0B1728",alignItems:"center",justifyContent:"center"},
+  goOnlineArrow:{fontSize:36,color:"#F2F6FC",fontWeight:"700"},
   goOnlineSmall:{fontSize:13,color:"#F2F6FC"},
   goOnlineText:{fontSize:14,color:"#F2F6FC",fontWeight:"900",marginTop:1},
   
@@ -564,7 +565,7 @@ const styles = StyleSheet.create({
   driverRatingBadge:{position:"absolute",top:145,right:12,backgroundColor:"#091321F2",borderWidth:1,borderColor:"#E9B949",borderRadius:14,paddingHorizontal:14,paddingVertical:8,minWidth:132,alignItems:"flex-end",elevation:8,shadowColor:"#000",shadowOpacity:.25,shadowRadius:8,shadowOffset:{width:0,height:3}},driverRatingLabel:{color:"#A7B7C9",fontSize:9,fontWeight:"900",letterSpacing:.6},driverRatingValue:{color:"#E9B949",fontSize:20,fontWeight:"900",marginTop:2},
   speedBadge:{position:"absolute",left:12,bottom:16,flexDirection:"row",alignItems:"baseline",gap:5,backgroundColor:"#0B1728F2",paddingHorizontal:15,paddingVertical:10,borderRadius:15,borderWidth:1,borderColor:"#29415F",elevation:7,shadowColor:"#000",shadowOpacity:.15,shadowRadius:8,shadowOffset:{width:0,height:3}},speedValue:{fontSize:25,fontWeight:"900",color:"#142536"},speedUnit:{fontSize:11,fontWeight:"800",color:"#9FB1C8"},mapAttribution:{position:"absolute",left:9,bottom:8,backgroundColor:"#0B1728D9",paddingHorizontal:7,paddingVertical:4,borderRadius:5},
   mapAttributionText:{color:"#A7B7C9",fontSize:8},
-  mapControlsFull:{position:"absolute",right:12,top:"34%",gap:8,zIndex:15},
+  mapControlsFull:{position:"absolute",right:14,top:"27%",gap:10,zIndex:15},
   topBar:{height:58,paddingHorizontal:19,flexDirection:"row",alignItems:"center",justifyContent:"space-between",borderBottomWidth:1,borderBottomColor:"#182438"},
   brand:{fontSize:17,fontWeight:"900",letterSpacing:0.8,color:"#F5F8FC"},brandAccent:{color:"#4F8DF7"},
   topStatus:{flexDirection:"row",alignItems:"center",gap:7,paddingHorizontal:11,paddingVertical:7,borderRadius:20,backgroundColor:"#222D3D"},topStatusOn:{backgroundColor:"#10372E"},
