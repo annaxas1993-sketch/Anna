@@ -33,6 +33,45 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+      - name: Configure permanent Android release signing
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          for name in ANDROID_KEYSTORE_BASE64 ANDROID_KEYSTORE_PASSWORD ANDROID_KEY_ALIAS ANDROID_KEY_PASSWORD; do
+            if [ -z "${!name:-}" ]; then
+              echo "::error::Missing GitHub Actions secret: $name. Add the four permanent signing secrets in Settings > Secrets and variables > Actions."
+              exit 1
+            fi
+          done
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > android/app/taxi-lider-upload.jks
+          test -s android/app/taxi-lider-upload.jks
+          python - <<'PY'
+          from pathlib import Path
+          import re
+          p = Path("android/app/build.gradle")
+          s = p.read_text()
+          signing = """signingConfigs {
+                  release {
+                      storeFile file("taxi-lider-upload.jks")
+                      storePassword System.getenv("ANDROID_KEYSTORE_PASSWORD")
+                      keyAlias System.getenv("ANDROID_KEY_ALIAS")
+                      keyPassword System.getenv("ANDROID_KEY_PASSWORD")
+                  }
+              }
+          """
+          if "signingConfigs {" not in s:
+              raise SystemExit("Could not locate Android signingConfigs block")
+          s = s.replace("signingConfigs {", signing + "\\nsigningConfigs {", 1)
+          pattern = r"(release\\s*\\{.*?signingConfig\\s+)signingConfigs\\.debug"
+          s, count = re.subn(pattern, r"\\1signingConfigs.release", s, count=1, flags=re.S)
+          if count != 1:
+              raise SystemExit("Could not switch the release build type to the permanent signing key")
+          p.write_text(s)
+          PY
       - name: Build release APK
         run: |
           cd android
