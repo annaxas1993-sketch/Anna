@@ -129,7 +129,7 @@ setTimeout(()=>{map.invalidateSize();if(window.ReactNativeWebView)window.ReactNa
     let active = true;
     let alerted = false;
     let lastCheck = 0;
-    const installedBuild = Number(Constants.expoConfig?.android?.versionCode || 1);
+    const installedBuild = Number(Constants.nativeBuildVersion || Constants.expoConfig?.android?.versionCode || 1);
     const checkForUpdate = async () => {
       if (!active || alerted || Date.now() - lastCheck < 60000) return;
       lastCheck = Date.now();
@@ -146,10 +146,10 @@ setTimeout(()=>{map.invalidateSize();if(window.ReactNativeWebView)window.ReactNa
         alerted = true;
         Alert.alert(
           "TAXI LIDER-ի նոր տարբերակ կա",
-          "Հասանելի է նոր թարմացում։ Ներբեռնե՞լ և տեղադրե՞լ նոր տարբերակը։",
+          "Հասանելի է նոր տարբերակ։ APK-ն կներբեռնվի, հետո բացիր ներբեռնված ֆայլը և հաստատիր տեղադրումը։",
           [
             { text: "Ավելի ուշ", style: "cancel", onPress: () => { alerted = false; } },
-            { text: "Թարմացնել", onPress: () => Linking.openURL(apk.browser_download_url).catch(() => Alert.alert("Սխալ", "Չհաջողվեց բացել APK-ի ներբեռնումը։")) }
+            { text: "Ներբեռնել", onPress: () => Linking.openURL(apk.browser_download_url).catch(() => Alert.alert("Սխալ", "Չհաջողվեց բացել APK-ի ներբեռնումը։")) }
           ],
           { cancelable: true, onDismiss: () => { alerted = false; } }
         );
