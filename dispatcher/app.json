@@ -11,6 +11,7 @@
       "versionCode": 1,
       "label": "TAXI LIDER Դիսպետչեր",
       "permissions": ["INTERNET"],
+      "usesCleartextTraffic": true,
       "backgroundColor": "#f3f5fa"
     }
   }
