@@ -54,18 +54,16 @@ jobs:
           import re
           p = Path("android/app/build.gradle")
           s = p.read_text()
-          signing = """signingConfigs {
-                  release {
+          signing = """release {
                       storeFile file("taxi-lider-upload.jks")
                       storePassword System.getenv("ANDROID_KEYSTORE_PASSWORD")
                       keyAlias System.getenv("ANDROID_KEY_ALIAS")
                       keyPassword System.getenv("ANDROID_KEY_PASSWORD")
                   }
-              }
           """
           if "signingConfigs {" not in s:
               raise SystemExit("Could not locate Android signingConfigs block")
-          s = s.replace("signingConfigs {", signing + "\nsigningConfigs {", 1)
+          s = s.replace("signingConfigs {", "signingConfigs {\\n                  " + signing, 1)
           pattern = r"(release\s*\{.*?signingConfig\s+)signingConfigs\.debug"
           s, count = re.subn(pattern, r"\1signingConfigs.release", s, count=1, flags=re.S)
           if count != 1:
