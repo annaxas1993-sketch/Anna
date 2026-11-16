@@ -65,9 +65,9 @@ jobs:
           """
           if "signingConfigs {" not in s:
               raise SystemExit("Could not locate Android signingConfigs block")
-          s = s.replace("signingConfigs {", signing + "\\nsigningConfigs {", 1)
-          pattern = r"(release\\s*\\{.*?signingConfig\\s+)signingConfigs\\.debug"
-          s, count = re.subn(pattern, r"\\1signingConfigs.release", s, count=1, flags=re.S)
+          s = s.replace("signingConfigs {", signing + "\nsigningConfigs {", 1)
+          pattern = r"(release\s*\{.*?signingConfig\s+)signingConfigs\.debug"
+          s, count = re.subn(pattern, r"\1signingConfigs.release", s, count=1, flags=re.S)
           if count != 1:
               raise SystemExit("Could not switch the release build type to the permanent signing key")
           p.write_text(s)
