@@ -91,12 +91,23 @@ export default function App() {
   const mapRef = useRef(null);
   const [sheetExpanded,setSheetExpanded]=useState(false);
   const sheetAnim=useRef(new Animated.Value(0)).current;
+  const sliderDragX=useRef(new Animated.Value(0)).current;
+  const sliderPan=useRef(PanResponder.create({
+    onStartShouldSetPanResponder:()=>true,
+    onMoveShouldSetPanResponder:(_,g)=>Math.abs(g.dx)>4,
+    onPanResponderMove:(_,g)=>sliderDragX.setValue(Math.max(0,Math.min(SCREEN_WIDTH*0.68,g.dx))),
+    onPanResponderRelease:(_,g)=>{
+      if(g.dx > SCREEN_WIDTH*0.4){toggleOnline();}
+      Animated.spring(sliderDragX,{toValue:0,useNativeDriver:true,tension:90,friction:11}).start();
+    },
+    onPanResponderTerminate:()=>Animated.spring(sliderDragX,{toValue:0,useNativeDriver:true,tension:90,friction:11}).start(),
+    onPanResponderTerminationRequest:()=>false
+  })).current;
   const sheetPan=useRef(PanResponder.create({
     onStartShouldSetPanResponder:()=>true,
     onMoveShouldSetPanResponder:(_,g)=>Math.abs(g.dx)>5 || Math.abs(g.dy)>5,
     onPanResponderRelease:(_,g)=>{
-      if(g.dx > 55 && Math.abs(g.dx) > Math.abs(g.dy)){toggleOnline();}
-      else if(g.dy < -35){setSheetExpanded(true);Animated.spring(sheetAnim,{toValue:1,useNativeDriver:false,bounciness:3}).start();}
+      if(g.dy < -35){setSheetExpanded(true);Animated.spring(sheetAnim,{toValue:1,useNativeDriver:false,bounciness:3}).start();}
       else if(g.dy > 35){setSheetExpanded(false);Animated.spring(sheetAnim,{toValue:0,useNativeDriver:false,bounciness:3}).start();}
     }
   })).current;
@@ -549,7 +560,7 @@ setTimeout(()=>{map.invalidateSize(true);map.setView(marker.getLatLng(),16,{anim
       <TouchableOpacity style={styles.driverInfoTile} onPress={()=>setTab("orders")}><View style={{flex:1}}><Text style={styles.driverInfoTitle}>{availableOrders.length ? "Կան նոր պատվերներ" : "Այս պահին ակտիվ պատվերներ չկան"}</Text><Text style={styles.driverInfoSubtitle}>{availableOrders.length ? "Բացիր և ընդունիր հարմար պատվերը" : "Կտեղեկացնենք, երբ պատվերներ հայտնվեն"}</Text></View><Text style={styles.driverChevron}>›</Text></TouchableOpacity>
       <TouchableOpacity style={styles.driverInfoTile} onPress={()=>setTab("orders")}><View style={{flex:1}}><Text style={styles.driverInfoTitle}>Իմ ուղևորությունները</Text><Text style={styles.driverInfoSubtitle}>Ընթացիկ՝ {myOrders.filter(o=>["accepted","arrived","started"].includes(o.status)).length} · Նոր առաջարկներ՝ {availableOrders.length}</Text></View><Text style={styles.driverChevron}>›</Text></TouchableOpacity>
       </> : null}
-      <TouchableOpacity onPress={toggleOnline} activeOpacity={0.88} style={[styles.goOnlineButton, !sheetExpanded && styles.goOnlineButtonCompact,online&&styles.goOnlineButtonActive]}><View style={[styles.goOnlineCircle,!sheetExpanded&&styles.goOnlineCircleCompact]}><Text style={[styles.goOnlineArrow,!sheetExpanded&&styles.goOnlineArrowCompact]}>{online ? "Ⅱ" : "➜"}</Text></View><View style={{flex:1,alignItems:"center"}}><Text style={styles.goOnlineSmall}>{online ? "Առցանց" : "Անցանց"}</Text><Text style={[styles.goOnlineText,!sheetExpanded&&styles.goOnlineTextCompact]}>{online ? "ԴՈՒՐՍ ԳԱԼ ԳԾԻՑ" : "ԴՈՒՐՍ ԳԱԼ ԳԻԾ"}</Text></View></TouchableOpacity>
+      <View {...sliderPan.panHandlers} style={[styles.goOnlineButton, !sheetExpanded && styles.goOnlineButtonCompact,online&&styles.goOnlineButtonActive]}><View pointerEvents="none" style={{flex:1,alignItems:"center",justifyContent:"center"}}><Text style={styles.goOnlineSmall}>{online ? "Առցանց" : "Անցանց"}</Text><Text style={[styles.goOnlineText,!sheetExpanded&&styles.goOnlineTextCompact]}>{online ? "ԴՈՒՐՍ ԳԱԼ ԳԾԻՑ" : "ԴՈՒՐՍ ԳԱԼ ԳԻԾ"}</Text></View><Animated.View pointerEvents="none" style={[styles.goOnlineCircle,!sheetExpanded&&styles.goOnlineCircleCompact,{position:"absolute",left:5,top:4,transform:[{translateX:sliderDragX}]}]}><Text style={[styles.goOnlineArrow,!sheetExpanded&&styles.goOnlineArrowCompact]}>➜</Text></Animated.View></View>
     </Animated.View></View> : <View style={{flex:1}}><View style={styles.topBar}><Text style={styles.brand}>TAXI <Text style={styles.brandAccent}>LIDER</Text></Text><View style={[styles.topStatus, online && styles.topStatusOn]}><View style={[styles.tinyDot, online && styles.statusDotOn]} /><Text style={styles.topStatusText}>{online ? "Առցանց" : "Անցանց"}</Text></View></View><ScrollView style={styles.scroll} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>{screens[tab]()}</ScrollView></View>}
     <View style={styles.tabBar}>{TABS.map(item =><TouchableOpacity key={item.id} style={[styles.tabItem, item.id==="tasks" && styles.tabCenter]} onPress={() => setTab(item.id)}>{item.id==="tasks" ? <View style={styles.tabCenterIcon}><Text style={{fontSize:22,color:"#FFFFFF",fontWeight:"900"}}>{item.icon}</Text></View> : <Text style={[styles.tabIcon, tab===item.id && styles.tabActive]}>{item.icon}</Text>}<Text style={[styles.tabLabel, tab===item.id && styles.tabActive]}>{item.label}</Text>{tab===item.id && <View style={styles.tabIndicator}/>}</TouchableOpacity>)}</View></SafeAreaView>;
 }
@@ -580,13 +591,13 @@ const styles = StyleSheet.create({
   driverInfoTitle:{fontSize:15,color:"#F2F6FC",fontWeight:"800"},
   driverInfoSubtitle:{fontSize:12,color:"#8FA3BD",marginTop:3},
   driverChevron:{fontSize:30,color:"#F2F6FC",marginLeft:10},
-  goOnlineButton:{height:66,backgroundColor:"transparent",borderRadius:22,marginTop:3,flexDirection:"row",alignItems:"center",padding:5,borderWidth:0,borderColor:"transparent",shadowOpacity:0},
-  goOnlineButtonActive:{backgroundColor:"transparent"},
+  goOnlineButton:{height:66,backgroundColor:"#D92332",borderRadius:22,marginTop:3,flexDirection:"row",alignItems:"center",padding:5,borderWidth:1.5,borderColor:"#FF6670",shadowColor:"#D92332",shadowOpacity:.3,shadowRadius:8,elevation:5,overflow:"hidden"},
+  goOnlineButtonActive:{backgroundColor:"#B91F2B"},
   goOnlineButtonCompact:{height:62,marginTop:1,padding:4},goOnlineCircleCompact:{width:52,height:52,borderRadius:26},goOnlineArrowCompact:{fontSize:28},goOnlineTextCompact:{fontSize:12},
-  goOnlineCircle:{width:54,height:54,borderRadius:27,backgroundColor:"transparent",alignItems:"center",justifyContent:"center",borderWidth:0,borderColor:"transparent"},
-  goOnlineArrow:{fontSize:36,color:"#D92332",fontWeight:"900"},
-  goOnlineSmall:{fontSize:11,color:"#D92332",fontWeight:"900"},
-  goOnlineText:{fontSize:14,color:"#D92332",fontWeight:"900",marginTop:1,letterSpacing:.35},
+  goOnlineCircle:{width:54,height:54,borderRadius:27,backgroundColor:"#080C13",alignItems:"center",justifyContent:"center",borderWidth:1,borderColor:"#FF8A90"},
+  goOnlineArrow:{fontSize:36,color:"#FFFFFF",fontWeight:"900"},
+  goOnlineSmall:{fontSize:11,color:"#FFFFFF",fontWeight:"900"},
+  goOnlineText:{fontSize:14,color:"#FFFFFF",fontWeight:"900",marginTop:1,letterSpacing:.35},
   
   safe:{flex:1,backgroundColor:"#0B1728"},
   fullMap:{flex:1,backgroundColor:"#0B1728"},
