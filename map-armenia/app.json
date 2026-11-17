@@ -1,0 +1,30 @@
+{
+  "expo": {
+    "name": "Հայաստան Քարտեզ",
+    "slug": "qartez-armenia",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "am.qartez.armenia"
+    },
+    "android": {
+      "package": "am.qartez.armenia",
+      "versionCode": 1,
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION"
+      ]
+    },
+    "plugins": [
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Քարտեզը օգտագործում է ձեր տեղադրությունը՝ քարտեզի վրա ձեր դիրքը ցույց տալու համար։"
+        }
+      ]
+    ]
+  }
+}
