@@ -113,7 +113,7 @@ export default function App() {
     const timer = setTimeout(async () => {
       setAddressLoading(true);
       try {
-        const url = "https://photon.komoot.io/api/?q=" + encodeURIComponent(query) + "&limit=12&lang=hy&lat=" + location.latitude + "&lon=" + location.longitude + "&bbox=43.4,38.8,46.7,41.4";
+        const url = "https://photon.komoot.io/api/?q=" + encodeURIComponent(query) + "&limit=12&lang=hy&lat=" + location.latitude + "&lon=" + location.longitude;
         const response = await fetch(url);
         if (!response.ok) throw new Error("search");
         const data = await response.json();
