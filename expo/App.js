@@ -1,4 +1,4 @@
-// Map tiles and routing use keyless public providers; preserve the existing map UI.
+// Map tiles and routing use keyless public providers; preserve the existing map UI. Heading-up navigation is enabled.
 import React, { useEffect, useRef, useState, useMemo } from "react";
 import { SafeAreaView, View, Text, StyleSheet, TouchableOpacity, StatusBar, ScrollView, Alert, Switch, BackHandler, TextInput, ActivityIndicator, AppState, Linking, Animated, PanResponder, Dimensions } from "react-native";
 import { WebView } from "react-native-webview";
