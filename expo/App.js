@@ -95,7 +95,8 @@ export default function App() {
     onStartShouldSetPanResponder:()=>true,
     onMoveShouldSetPanResponder:(_,g)=>Math.abs(g.dy)>5,
     onPanResponderRelease:(_,g)=>{
-      if(g.dy < -35){setSheetExpanded(true);Animated.spring(sheetAnim,{toValue:1,useNativeDriver:false,bounciness:3}).start();}
+      if(g.dx > 55 && Math.abs(g.dx) > Math.abs(g.dy)){toggleOnline();}
+      else if(g.dy < -35){setSheetExpanded(true);Animated.spring(sheetAnim,{toValue:1,useNativeDriver:false,bounciness:3}).start();}
       else if(g.dy > 35){setSheetExpanded(false);Animated.spring(sheetAnim,{toValue:0,useNativeDriver:false,bounciness:3}).start();}
     }
   })).current;
@@ -563,10 +564,10 @@ const styles = StyleSheet.create({
   driverHomeHint:{fontSize:9,fontWeight:"900",color:"#E9B949",marginTop:3,letterSpacing:.5},
   driverSettingsButton:{width:44,height:44,borderRadius:14,backgroundColor:"#151B23",alignItems:"center",justifyContent:"center",borderWidth:1,borderColor:"#303A46",elevation:5,shadowColor:"#000",shadowOpacity:.22,shadowRadius:8},
   driverSettingsGlyph:{fontSize:22,color:"#F4C400"},
-  lightMapControl:{width:46,height:46,borderRadius:23,backgroundColor:"#F4C400",alignItems:"center",justifyContent:"center",borderWidth:1,borderColor:"#FFE56A",elevation:8,shadowColor:"#000",shadowOpacity:.28,shadowRadius:9,shadowOffset:{width:0,height:3}},
-  lightMapControlText:{fontSize:25,color:"#101116",fontWeight:"900"},
-  driverBottomSheet:{position:"absolute",left:12,right:12,bottom:76,backgroundColor:"#080C13F7",borderRadius:27,borderWidth:1.5,borderColor:"#39485B",paddingHorizontal:13,paddingTop:4,paddingBottom:9,elevation:24,shadowColor:"#000",shadowOpacity:.42,shadowRadius:18,shadowOffset:{width:0,height:5},overflow:"hidden"},
-  sheetDragArea:{height:24,alignItems:"center",justifyContent:"center"},sheetDragHandle:{width:42,height:5,borderRadius:3,backgroundColor:"#36516F"},
+  lightMapControl:{width:43,height:43,borderRadius:22,backgroundColor:"#D93636",alignItems:"center",justifyContent:"center",borderWidth:1,borderColor:"#FF7777",elevation:8,shadowColor:"#000",shadowOpacity:.3,shadowRadius:9,shadowOffset:{width:0,height:3}},
+  lightMapControlText:{fontSize:24,color:"#FFFFFF",fontWeight:"900"},
+  driverBottomSheet:{position:"absolute",left:12,right:12,bottom:88,backgroundColor:"#080C13F7",borderRadius:27,borderWidth:1.5,borderColor:"#39485B",paddingHorizontal:13,paddingTop:2,paddingBottom:8,elevation:24,shadowColor:"#000",shadowOpacity:.42,shadowRadius:18,shadowOffset:{width:0,height:5},overflow:"hidden"},
+  sheetDragArea:{height:18,alignItems:"center",justifyContent:"center"},sheetDragHandle:{width:48,height:5,borderRadius:3,backgroundColor:"#E23B3B"},
   driverStatsRow:{flexDirection:"row",alignItems:"center",paddingBottom:16,marginBottom:12,borderBottomWidth:1,borderBottomColor:"#29415F"},
   driverStat:{flex:1,minWidth:0,paddingHorizontal:2,alignItems:"center",justifyContent:"center"},
   driverStatLabel:{fontSize:10,color:"#AFC0D4",textAlign:"center",includeFontPadding:false},
@@ -601,7 +602,7 @@ const styles = StyleSheet.create({
   driverRatingBadge:{position:"absolute",top:145,right:12,backgroundColor:"#091321F2",borderWidth:1,borderColor:"#E9B949",borderRadius:14,paddingHorizontal:14,paddingVertical:8,minWidth:132,alignItems:"flex-end",elevation:8,shadowColor:"#000",shadowOpacity:.25,shadowRadius:8,shadowOffset:{width:0,height:3}},driverRatingLabel:{color:"#A7B7C9",fontSize:9,fontWeight:"900",letterSpacing:.6},driverRatingValue:{color:"#E9B949",fontSize:20,fontWeight:"900",marginTop:2},
   speedBadge:{position:"absolute",left:12,bottom:16,flexDirection:"row",alignItems:"baseline",gap:5,backgroundColor:"#0B1728F2",paddingHorizontal:15,paddingVertical:10,borderRadius:15,borderWidth:1,borderColor:"#29415F",elevation:7,shadowColor:"#000",shadowOpacity:.15,shadowRadius:8,shadowOffset:{width:0,height:3}},speedValue:{fontSize:25,fontWeight:"900",color:"#142536"},speedUnit:{fontSize:11,fontWeight:"800",color:"#9FB1C8"},mapAttribution:{position:"absolute",left:9,bottom:8,backgroundColor:"#0B1728D9",paddingHorizontal:7,paddingVertical:4,borderRadius:5},
   mapAttributionText:{color:"#A7B7C9",fontSize:8},
-  mapControlsFull:{position:"absolute",right:12,bottom:250,gap:9,zIndex:35,alignItems:"center"},
+  mapControlsFull:{position:"absolute",right:12,bottom:258,gap:8,zIndex:35,alignItems:"center"},
   topBar:{height:58,paddingHorizontal:19,flexDirection:"row",alignItems:"center",justifyContent:"space-between",borderBottomWidth:1,borderBottomColor:"#182438"},
   brand:{fontSize:17,fontWeight:"900",letterSpacing:0.8,color:"#F5F8FC"},brandAccent:{color:"#E9B949"},
   topStatus:{flexDirection:"row",alignItems:"center",gap:7,paddingHorizontal:11,paddingVertical:7,borderRadius:20,backgroundColor:"#222D3D"},topStatusOn:{backgroundColor:"#10372E"},
@@ -625,5 +626,5 @@ const styles = StyleSheet.create({
   customerCallButton:{marginTop:10,backgroundColor:"#E9B949",paddingVertical:13,paddingHorizontal:16,borderRadius:12,alignItems:"center"},customerCallButtonDisabled:{opacity:.45},customerCallButtonText:{color:"#06251B",fontSize:11,fontWeight:"900",letterSpacing:.4},
   balanceCard:{backgroundColor:"#10372E",borderRadius:16,padding:17,borderWidth:1,borderColor:"#1A654F"},balanceCaption:{color:"#A2CDBF",fontSize:9,fontWeight:"900",letterSpacing:1.2},balanceValue:{color:"#FFFFFF",fontSize:29,fontWeight:"900",marginTop:8},balanceFoot:{color:"#A2CDBF",fontSize:10,marginTop:5},
   profileCard:{alignItems:"center",backgroundColor:"#121E2F",padding:20,borderRadius:18,borderWidth:1,borderColor:"#24344A",marginBottom:7},profileMetrics:{flexDirection:"row",alignItems:"center",alignSelf:"stretch",marginTop:18,paddingTop:14,borderTopWidth:1,borderTopColor:"#2A394D"},profileMetric:{flex:1,alignItems:"center"},profileMetricValue:{color:"#E9B949",fontSize:18,fontWeight:"900"},profileMetricLabel:{color:"#8291A7",fontSize:8,fontWeight:"800",marginTop:5,textAlign:"center"},profileMetricDivider:{width:1,height:30,backgroundColor:"#2A394D"},bigAvatar:{width:66,height:66,borderRadius:23,backgroundColor:"#1A3445",borderWidth:1,borderColor:"#E9B949",alignItems:"center",justifyContent:"center"},bigAvatarText:{color:"#E9B949",fontSize:29,fontWeight:"900"},profileName:{color:"#F5F8FC",fontSize:16,fontWeight:"900",marginTop:10},profileStatus:{color:"#8392A7",fontSize:10,marginTop:4},
-  tabBar:{height:76,backgroundColor:"#080B10",borderTopWidth:1,borderTopColor:"#39414D",flexDirection:"row",justifyContent:"space-around",alignItems:"center",paddingBottom:4,paddingTop:4,elevation:22},tabItem:{flex:1,alignItems:"center",justifyContent:"center",height:"100%",gap:3,paddingTop:2},tabCenter:{transform:[{translateY:0}]},tabCenterIcon:{width:48,height:42,borderRadius:14,backgroundColor:"#F4C400",alignItems:"center",justifyContent:"center",marginBottom:0,elevation:8},tabIcon:{fontSize:27,color:"#9298A2"},tabLabel:{fontSize:10,color:"#9298A2",fontWeight:"800"},tabActive:{color:"#F4C400"},tabIndicator:{position:"absolute",top:0,width:30,height:3,backgroundColor:"#F4C400",borderRadius:2}
+  tabBar:{height:88,backgroundColor:"#080B10",borderTopWidth:1,borderTopColor:"#39414D",flexDirection:"row",justifyContent:"space-around",alignItems:"center",paddingBottom:5,paddingTop:5,elevation:22},tabItem:{flex:1,alignItems:"center",justifyContent:"center",height:"100%",gap:3,paddingTop:2},tabCenter:{transform:[{translateY:0}]},tabCenterIcon:{width:54,height:48,borderRadius:16,backgroundColor:"#F4C400",alignItems:"center",justifyContent:"center",marginBottom:0,elevation:8},tabIcon:{fontSize:30,color:"#9298A2"},tabLabel:{fontSize:11,color:"#9298A2",fontWeight:"800"},tabActive:{color:"#F4C400"},tabIndicator:{position:"absolute",top:0,width:30,height:3,backgroundColor:"#F4C400",borderRadius:2}
 });
