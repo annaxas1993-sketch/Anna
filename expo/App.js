@@ -108,28 +108,41 @@ export default function App() {
     return data;
   };
   const zoomMap = (factor) => mapRef.current?.injectJavaScript(`window.axasZoom && window.axasZoom(${factor}); true;`);
+  const geocodeAddress = async (query, limit=12) => {
+    const clean = query.trim();
+    if (!clean) return [];
+    const photonUrl = "https://photon.komoot.io/api/?q=" + encodeURIComponent(clean) + "&limit=" + limit + "&lang=en&lat=" + location.latitude + "&lon=" + location.longitude;
+    try {
+      const response = await fetch(photonUrl, { headers: { "Accept": "application/json" } });
+      if (response.ok) {
+        const data = await response.json();
+        const results = (data.features || []).map((feature, index) => {
+          const p = feature.properties || {}, coords = feature.geometry?.coordinates || [];
+          const street = [p.street, p.housenumber].filter(Boolean).join(" ");
+          const main = p.housenumber ? [p.name && p.name !== p.street ? p.name : null, street].filter(Boolean).join(" · ") : (p.name && p.name !== p.street ? p.name : (street || p.name || p.locality || p.city || p.district || p.county));
+          const name = [...new Set([main, p.district, p.city || p.locality, p.state, p.country].filter(Boolean))].join(", ");
+          return { id: p.osm_id || index, name, lat: Number(coords[1]), lon: Number(coords[0]) };
+        }).filter(item => item.name && Number.isFinite(item.lat) && Number.isFinite(item.lon));
+        if (results.length) return results;
+      }
+    } catch (_) {}
+    try {
+      const url = "https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&limit=" + limit + "&countrycodes=am&q=" + encodeURIComponent(clean);
+      const response = await fetch(url, { headers: { "Accept": "application/json", "Accept-Language": "hy,en" } });
+      if (!response.ok) throw new Error("geocoder");
+      const data = await response.json();
+      return (data || []).map((item, index) => ({ id: item.place_id || index, name: item.display_name || item.name || clean, lat: Number(item.lat), lon: Number(item.lon) })).filter(item => item.name && Number.isFinite(item.lat) && Number.isFinite(item.lon));
+    } catch (_) { return []; }
+  };
   useEffect(() => {
     const query = addressQuery.trim();
     if (!addressSearchOpen || query.length < 2) { setAddressResults([]); setAddressLoading(false); return; }
     let active = true;
     const timer = setTimeout(async () => {
       setAddressLoading(true);
-      try {
-        const url = "https://photon.komoot.io/api/?q=" + encodeURIComponent(query) + "&limit=12&lang=hy&lat=" + location.latitude + "&lon=" + location.longitude;
-        const response = await fetch(url);
-        if (!response.ok) throw new Error("search");
-        const data = await response.json();
-        const results = (data.features || []).map((feature, index) => {
-          const p = feature.properties || {}, coords = feature.geometry?.coordinates || [];
-          const street = [p.street, p.housenumber].filter(Boolean).join(" ");
-          const main = p.housenumber ? [p.name && p.name !== p.street ? p.name : null, street].filter(Boolean).join(' · ') : (p.name && p.name !== p.street ? p.name : (street || p.name || p.locality || p.city || p.district || p.county));
-          const name = [...new Set([main, p.district, p.city || p.locality, p.state, p.country].filter(Boolean))].join(", ");
-          return { id: p.osm_id || index, name, lat: Number(coords[1]), lon: Number(coords[0]) };
-        }).filter(item => item.name && Number.isFinite(item.lat) && Number.isFinite(item.lon));
-        if (active) setAddressResults(results);
-      } catch (_) { if (active) setAddressResults([]); }
+      try { const results = await geocodeAddress(query, 12); if (active) setAddressResults(results); }
       finally { if (active) setAddressLoading(false); }
-    }, 350);
+    }, 450);
     return () => { active = false; clearTimeout(timer); };
   }, [addressQuery, addressSearchOpen, location.latitude, location.longitude]);
   const searchAddress = async () => {
@@ -137,20 +150,10 @@ export default function App() {
     if (!query) { Alert.alert("Հասցեի որոնում", "Գրիր փողոցը, շենքը կամ հասցեն։"); return; }
     setAddressLoading(true); setAddressResults([]);
     try {
-      const url = "https://photon.komoot.io/api/?q=" + encodeURIComponent(query) + "&limit=10&lang=hy&lat=" + location.latitude + "&lon=" + location.longitude + "";
-      const response = await fetch(url);
-      if (!response.ok) throw new Error("search");
-      const data = await response.json();
-      const results = (data.features || []).map((feature, index) => {
-        const p = feature.properties || {}, coords = feature.geometry?.coordinates || [];
-        const street = [p.street, p.housenumber].filter(Boolean).join(" ");
-        const main = p.housenumber ? [p.name && p.name !== p.street ? p.name : null, street].filter(Boolean).join(' · ') : (p.name && p.name !== p.street ? p.name : (street || p.name || p.locality || p.city || p.district || p.county));
-        const name = [...new Set([main, p.district, p.city || p.locality, p.state, p.country].filter(Boolean))].join(", ");
-        return { id: p.osm_id || index, name, lat: Number(coords[1]), lon: Number(coords[0]) };
-      }).filter(item => item.name && Number.isFinite(item.lat) && Number.isFinite(item.lon));
+      const results = await geocodeAddress(query, 15);
       setAddressResults(results);
-      if (!results.length) Alert.alert("Հասցեն չի գտնվել", "Փորձիր գրել փողոցը, շենքի համարը կամ մոտակա հայտնի վայրը։");
-    } catch (e) { Alert.alert("Որոնման սխալ", "Հասցեն չհաջողվեց գտնել։ Ստուգիր ինտերնետը։"); }
+      if (!results.length) Alert.alert("Հասցեն չի գտնվել", "Փորձիր գրել հասցեն հայերեն կամ անգլերեն, փողոցի անունը և շենքի համարը։");
+    } catch (_) { Alert.alert("Որոնման սխալ", "Հասցեն չհաջողվեց գտնել։ Ստուգիր ինտերնետը։"); }
     finally { setAddressLoading(false); }
   };
   const navigateToAddress = (item) => {
