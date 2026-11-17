@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 mkdir -p data
-if [ ! -f data/armenia-latest.osm.pbf ]; then
-  curl -L --fail --output data/armenia-latest.osm.pbf https://download.geofabrik.de/asia/armenia-latest.osm.pbf
+if [ ! -f data/region.osm.pbf ]; then
+  curl -L --fail --output data/region.osm.pbf https://download.geofabrik.de/asia/region.osm.pbf
 fi
 docker compose --profile import run --rm import-armenia
 docker compose up -d map-tiles
