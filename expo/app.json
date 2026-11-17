@@ -17,8 +17,7 @@
         "foregroundImage": "./assets/adaptive-foreground.png",
         "backgroundColor": "#081321"
       },
-      "versionCode": 4,
-      "minSdkVersion": 29
+      "versionCode": 4
     },
     "ios": {
       "supportsTablet": false
