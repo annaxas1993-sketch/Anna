@@ -25,8 +25,17 @@ jobs:
         run: |
           python -m pip install --quiet pillow
           python assets/generate_icon.py
-      - name: Set Android build number
-        run: node -e 'const fs=require("fs");const p="app.json";const j=JSON.parse(fs.readFileSync(p));j.expo.android.versionCode=Number(process.env.GITHUB_RUN_NUMBER);fs.writeFileSync(p,JSON.stringify(j,null,2)+"\n");'
+      - name: Set automatic app version and Android build number
+        run: |
+          node <<'NODE'
+          const fs = require("fs");
+          const p = "app.json";
+          const j = JSON.parse(fs.readFileSync(p, "utf8"));
+          const build = Number(process.env.GITHUB_RUN_NUMBER);
+          j.expo.version = `1.0.${build}`;
+          j.expo.android.versionCode = build;
+          fs.writeFileSync(p, JSON.stringify(j, null, 2) + "\n");
+          NODE
       - name: Generate native Android project
         run: npx expo prebuild --platform android --non-interactive
       - uses: actions/setup-java@v4
