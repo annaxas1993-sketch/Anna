@@ -1,0 +1,22 @@
+services:
+  import-armenia:
+    image: overv/openstreetmap-tile-server:latest
+    container_name: qartez-armenia-import
+    volumes:
+      - ./data:/data
+    environment:
+      THREADS: 4
+    command: import
+    profiles: ["import"]
+
+  map-tiles:
+    image: overv/openstreetmap-tile-server:latest
+    container_name: qartez-armenia-tiles
+    restart: unless-stopped
+    volumes:
+      - ./data:/data
+    environment:
+      THREADS: 4
+    command: run
+    ports:
+      - "8080:80"
