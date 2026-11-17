@@ -2,7 +2,7 @@
   "expo": {
     "name": "TAXI LIDER",
     "slug": "taxi-lider",
-    "version": "1.0.2",
+    "version": "1.0.3",
     "orientation": "portrait",
     "userInterfaceStyle": "dark",
     "newArchEnabled": true,
@@ -17,7 +17,7 @@
         "foregroundImage": "./assets/adaptive-foreground.png",
         "backgroundColor": "#081321"
       },
-      "versionCode": 3
+      "versionCode": 4
     },
     "ios": {
       "supportsTablet": false
