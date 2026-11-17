@@ -16,7 +16,7 @@ const TABS = [
   { id: "home", icon: "⌂", label: "Գլխավոր" },
   { id: "orders", icon: "▤", label: "Պատվերներ" },
   { id: "balance", icon: "֏", label: "Հաշվեկշիռ" },
-  { id: "profile", icon: "●", label: "Պրոֆիլ" },
+  { id: "profile", icon: "☰", label: "Պրոֆիլ" },
 ];
 
 
@@ -93,7 +93,7 @@ export default function App() {
   const sheetAnim=useRef(new Animated.Value(0)).current;
   const sheetPan=useRef(PanResponder.create({
     onStartShouldSetPanResponder:()=>true,
-    onMoveShouldSetPanResponder:(_,g)=>Math.abs(g.dy)>5,
+    onMoveShouldSetPanResponder:(_,g)=>Math.abs(g.dx)>5 || Math.abs(g.dy)>5,
     onPanResponderRelease:(_,g)=>{
       if(g.dx > 55 && Math.abs(g.dx) > Math.abs(g.dy)){toggleOnline();}
       else if(g.dy < -35){setSheetExpanded(true);Animated.spring(sheetAnim,{toValue:1,useNativeDriver:false,bounciness:3}).start();}
@@ -526,7 +526,7 @@ setTimeout(()=>{map.invalidateSize(true);map.setView(marker.getLatLng(),16,{anim
   const screens = {orders:renderOrders, tasks:renderTasks, balance:renderBalance, profile:renderProfile};
   return <SafeAreaView style={styles.safe}><StatusBar barStyle="light-content" backgroundColor="#080E19"/>
     {tab === "home" ? <View style={styles.fullMap}><WebView ref={mapRef} style={StyleSheet.absoluteFillObject} source={{ html: mapHtml, baseUrl: "https://localhost" }} originWhitelist={["*"]} javaScriptEnabled domStorageEnabled mixedContentMode="always" setSupportMultipleWindows={false} cacheEnabled onMessage={(event) => { if (event.nativeEvent.data === "MAP_READY") setMapReady(true); if (event.nativeEvent.data === "OPEN_ADDRESS_SEARCH") { setAddressSearchOpen(true); setAddressQuery(""); setAddressResults([]); } }} />{addressSearchOpen ? <View style={{position:"absolute",top:0,left:0,right:0,bottom:0,zIndex:100000,elevation:100,backgroundColor:"#0B1728",paddingTop:StatusBar.currentHeight||28}}><View style={{flexDirection:"row",alignItems:"center",paddingHorizontal:16,paddingVertical:14,borderBottomWidth:1,borderBottomColor:"#29415F"}}><TouchableOpacity onPress={()=>{setAddressSearchOpen(false);setAddressResults([]);}} style={{padding:8,marginRight:8}}><Text style={{color:"#F2F6FC",fontSize:28}}>‹</Text></TouchableOpacity><Text style={{color:"#F2F6FC",fontSize:18,fontWeight:"900",flex:1}}>Որոնել հասցե</Text></View><View style={{margin:14,flexDirection:"row",alignItems:"center",backgroundColor:"#14243A",borderWidth:1,borderColor:"#E9B949",borderRadius:14,paddingHorizontal:12}}><Text style={{color:"#E9B949",fontSize:20,marginRight:8}}>⌕</Text><TextInput autoFocus value={addressQuery} onChangeText={setAddressQuery} placeholder="Օրինակ՝ Rustavi 7" placeholderTextColor="#8FA3BD" returnKeyType="search" onSubmitEditing={searchAddress} style={{flex:1,color:"#FFFFFF",fontSize:16,paddingVertical:14}}/><TouchableOpacity onPress={()=>{setAddressQuery("");setAddressResults([]);}}><Text style={{color:"#AFC0D4",fontSize:20,padding:6}}>×</Text></TouchableOpacity></View><Text style={{color:"#8FA3BD",fontSize:12,marginHorizontal:18,marginBottom:8}}>Գրիր հասցեն․ առաջարկները կհայտնվեն ըստ մուտքագրված տառերի։</Text>{addressLoading ? <View style={{padding:20,alignItems:"center"}}><ActivityIndicator color="#E9B949"/><Text style={{color:"#AFC0D4",marginTop:8}}>Որոնվում է...</Text></View> : <ScrollView keyboardShouldPersistTaps="handled">{addressResults.map(item=><TouchableOpacity key={String(item.id)} onPress={()=>navigateToAddress(item)} style={{paddingHorizontal:18,paddingVertical:15,borderBottomWidth:1,borderBottomColor:"#263B55"}}><Text style={{color:"#F2F6FC",fontSize:15,fontWeight:"700"}}>{item.name}</Text><Text style={{color:"#8FA3BD",fontSize:11,marginTop:4}}>Հասցե • Սեղմիր քարտեզի վրա ցույց տալու համար</Text></TouchableOpacity>)}{addressQuery.trim().length>=2&&!addressResults.length&&!addressLoading?<Text style={{color:"#AFC0D4",padding:20}}>Համապատասխան հասցե չի գտնվել։ Փորձիր գրել փողոցի անունը կամ շենքի համարը։</Text>:null}</ScrollView>}</View> : null}<View style={styles.driverHomeHeader}>
-      <TouchableOpacity style={styles.headerMenuButton} onPress={()=>setTab("profile")}><Text style={styles.headerMenuGlyph}>☰</Text></TouchableOpacity>
+      
       <View style={styles.headerBrandWrap}><Text style={styles.headerBrand}>LIDER <Text style={styles.headerBrandAccent}>TAXI</Text></Text><Text style={styles.driverHomeHint}>{online ? "● ԱՌՑԱՆՑ · ՊԱՏՎԵՐՆԵՐ ԵՆ ՈՐՈՆՎՈՒՄ" : "● ԱՆՑԱՆՑ · ՊԱՏՎԵՐՆԵՐԸ ԴԱԴԱՐԵՑՎԱԾ ԵՆ"}</Text></View>
       <TouchableOpacity style={styles.driverSettingsButton} onPress={()=>{setTab("profile");setProfileSection("settings");}}><Text style={styles.driverSettingsGlyph}>⚙</Text></TouchableOpacity>
     </View>
@@ -566,7 +566,7 @@ const styles = StyleSheet.create({
   driverSettingsGlyph:{fontSize:22,color:"#F4C400"},
   lightMapControl:{width:43,height:43,borderRadius:22,backgroundColor:"#D93636",alignItems:"center",justifyContent:"center",borderWidth:1,borderColor:"#FF7777",elevation:8,shadowColor:"#000",shadowOpacity:.3,shadowRadius:9,shadowOffset:{width:0,height:3}},
   lightMapControlText:{fontSize:24,color:"#FFFFFF",fontWeight:"900"},
-  driverBottomSheet:{position:"absolute",left:12,right:12,bottom:88,backgroundColor:"#080C13F7",borderRadius:27,borderWidth:1.5,borderColor:"#39485B",paddingHorizontal:13,paddingTop:2,paddingBottom:8,elevation:24,shadowColor:"#000",shadowOpacity:.42,shadowRadius:18,shadowOffset:{width:0,height:5},overflow:"hidden"},
+  driverBottomSheet:{position:"absolute",left:12,right:12,bottom:0,backgroundColor:"#080C13F7",borderRadius:27,borderWidth:1.5,borderColor:"#39485B",paddingHorizontal:13,paddingTop:2,paddingBottom:8,elevation:24,shadowColor:"#000",shadowOpacity:.42,shadowRadius:18,shadowOffset:{width:0,height:5},overflow:"hidden"},
   sheetDragArea:{height:18,alignItems:"center",justifyContent:"center"},sheetDragHandle:{width:48,height:5,borderRadius:3,backgroundColor:"#E23B3B"},
   driverStatsRow:{flexDirection:"row",alignItems:"center",paddingBottom:16,marginBottom:12,borderBottomWidth:1,borderBottomColor:"#29415F"},
   driverStat:{flex:1,minWidth:0,paddingHorizontal:2,alignItems:"center",justifyContent:"center"},
