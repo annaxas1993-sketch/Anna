@@ -14,8 +14,8 @@ function distanceBetweenMeters(a,b){const rad=v=>v*Math.PI/180,dLat=rad(b.latitu
 function calculateTaxiFare(meters){const km=Math.max(0,meters)/1000;return TAXIMETER_BASE_FARE+(km>TAXIMETER_INCLUDED_KM?Math.ceil(km-TAXIMETER_INCLUDED_KM)*TAXIMETER_EXTRA_KM_RATE:0);}
 const TABS = [
   { id: "home", icon: "⌂", label: "Գլխավոր" },
-  { id: "orders", icon: "▣", label: "Պատվերներ" },
-  { id: "balance", icon: "₽", label: "Հաշվեկշիռ" },
+  { id: "orders", icon: "▤", label: "Պատվերներ" },
+  { id: "balance", icon: "֏", label: "Հաշվեկշիռ" },
   { id: "profile", icon: "●", label: "Պրոֆիլ" },
 ];
 
@@ -525,8 +525,9 @@ setTimeout(()=>{map.invalidateSize(true);map.setView(marker.getLatLng(),16,{anim
   const screens = {orders:renderOrders, tasks:renderTasks, balance:renderBalance, profile:renderProfile};
   return <SafeAreaView style={styles.safe}><StatusBar barStyle="light-content" backgroundColor="#080E19"/>
     {tab === "home" ? <View style={styles.fullMap}><WebView ref={mapRef} style={StyleSheet.absoluteFillObject} source={{ html: mapHtml, baseUrl: "https://localhost" }} originWhitelist={["*"]} javaScriptEnabled domStorageEnabled mixedContentMode="always" setSupportMultipleWindows={false} cacheEnabled onMessage={(event) => { if (event.nativeEvent.data === "MAP_READY") setMapReady(true); if (event.nativeEvent.data === "OPEN_ADDRESS_SEARCH") { setAddressSearchOpen(true); setAddressQuery(""); setAddressResults([]); } }} />{addressSearchOpen ? <View style={{position:"absolute",top:0,left:0,right:0,bottom:0,zIndex:100000,elevation:100,backgroundColor:"#0B1728",paddingTop:StatusBar.currentHeight||28}}><View style={{flexDirection:"row",alignItems:"center",paddingHorizontal:16,paddingVertical:14,borderBottomWidth:1,borderBottomColor:"#29415F"}}><TouchableOpacity onPress={()=>{setAddressSearchOpen(false);setAddressResults([]);}} style={{padding:8,marginRight:8}}><Text style={{color:"#F2F6FC",fontSize:28}}>‹</Text></TouchableOpacity><Text style={{color:"#F2F6FC",fontSize:18,fontWeight:"900",flex:1}}>Որոնել հասցե</Text></View><View style={{margin:14,flexDirection:"row",alignItems:"center",backgroundColor:"#14243A",borderWidth:1,borderColor:"#E9B949",borderRadius:14,paddingHorizontal:12}}><Text style={{color:"#E9B949",fontSize:20,marginRight:8}}>⌕</Text><TextInput autoFocus value={addressQuery} onChangeText={setAddressQuery} placeholder="Օրինակ՝ Rustavi 7" placeholderTextColor="#8FA3BD" returnKeyType="search" onSubmitEditing={searchAddress} style={{flex:1,color:"#FFFFFF",fontSize:16,paddingVertical:14}}/><TouchableOpacity onPress={()=>{setAddressQuery("");setAddressResults([]);}}><Text style={{color:"#AFC0D4",fontSize:20,padding:6}}>×</Text></TouchableOpacity></View><Text style={{color:"#8FA3BD",fontSize:12,marginHorizontal:18,marginBottom:8}}>Գրիր հասցեն․ առաջարկները կհայտնվեն ըստ մուտքագրված տառերի։</Text>{addressLoading ? <View style={{padding:20,alignItems:"center"}}><ActivityIndicator color="#E9B949"/><Text style={{color:"#AFC0D4",marginTop:8}}>Որոնվում է...</Text></View> : <ScrollView keyboardShouldPersistTaps="handled">{addressResults.map(item=><TouchableOpacity key={String(item.id)} onPress={()=>navigateToAddress(item)} style={{paddingHorizontal:18,paddingVertical:15,borderBottomWidth:1,borderBottomColor:"#263B55"}}><Text style={{color:"#F2F6FC",fontSize:15,fontWeight:"700"}}>{item.name}</Text><Text style={{color:"#8FA3BD",fontSize:11,marginTop:4}}>Հասցե • Սեղմիր քարտեզի վրա ցույց տալու համար</Text></TouchableOpacity>)}{addressQuery.trim().length>=2&&!addressResults.length&&!addressLoading?<Text style={{color:"#AFC0D4",padding:20}}>Համապատասխան հասցե չի գտնվել։ Փորձիր գրել փողոցի անունը կամ շենքի համարը։</Text>:null}</ScrollView>}</View> : null}<View style={styles.driverHomeHeader}>
-      <View><Text style={styles.driverHomeStatus}>{online ? "Դու առցանց ես" : "Դու անցանց ես"}</Text><Text style={styles.driverHomeHint}>{online ? "Փնտրում ենք պատվերներ" : "Պատվերների որոնումն անջատված է"}</Text></View>
-      <TouchableOpacity style={styles.driverSettingsButton} onPress={()=>{setTab("profile");setProfileSection("settings");}}><Text style={styles.driverSettingsGlyph}>☷</Text></TouchableOpacity>
+      <TouchableOpacity style={styles.headerMenuButton} onPress={()=>setTab("profile")}><Text style={styles.headerMenuGlyph}>☰</Text></TouchableOpacity>
+      <View style={styles.headerBrandWrap}><Text style={styles.headerBrand}>LIDER <Text style={styles.headerBrandAccent}>TAXI</Text></Text><Text style={styles.driverHomeHint}>{online ? "● ԱՌՑԱՆՑ · ՊԱՏՎԵՐՆԵՐ ԵՆ ՈՐՈՆՎՈՒՄ" : "● ԱՆՑԱՆՑ · ՊԱՏՎԵՐՆԵՐԸ ԴԱԴԱՐԵՑՎԱԾ ԵՆ"}</Text></View>
+      <TouchableOpacity style={styles.driverSettingsButton} onPress={()=>{setTab("profile");setProfileSection("settings");}}><Text style={styles.driverSettingsGlyph}>⚙</Text></TouchableOpacity>
     </View>
     {fareTripOrderId ? <View style={styles.mapTaximeterBadge}><Text style={styles.mapTaximeterLabel}>ՏԱՔՍՈՄԵՏՐ</Text><Text style={styles.mapTaximeterFare}>{calculateTaxiFare(fareDistanceMeters).toLocaleString("hy-AM")} ֏</Text><Text style={styles.mapTaximeterKm}>{(fareDistanceMeters/1000).toFixed(2)} կմ</Text></View> : null}
     <View style={styles.mapControlsFull}><TouchableOpacity style={styles.lightMapControl} onPress={() => zoomMap(0.55)}><Text style={styles.lightMapControlText}>＋</Text></TouchableOpacity><TouchableOpacity style={styles.lightMapControl} onPress={() => zoomMap(1.8)}><Text style={styles.lightMapControlText}>−</Text></TouchableOpacity><TouchableOpacity style={styles.lightMapControl} onPress={() => mapRef.current?.injectJavaScript("window.axasLocate && window.axasLocate(); true;")}><Text style={styles.lightMapControlText}>➤</Text></TouchableOpacity></View>
@@ -552,14 +553,19 @@ setTimeout(()=>{map.invalidateSize(true);map.setView(marker.getLatLng(),16,{anim
 const styles = StyleSheet.create({
   safe:{flex:1,backgroundColor:"#101116"},
   fullMap:{flex:1,backgroundColor:"#0B1728"},
-  driverHomeHeader:{position:"absolute",top:10,left:18,right:18,zIndex:20,flexDirection:"row",alignItems:"flex-start",justifyContent:"space-between"},
+  driverHomeHeader:{position:"absolute",top:0,left:0,right:0,zIndex:20,height:78,paddingHorizontal:14,paddingTop:8,backgroundColor:"#080B10F2",borderBottomWidth:1,borderBottomColor:"#26303B",flexDirection:"row",alignItems:"center",justifyContent:"space-between",elevation:8},
+  headerMenuButton:{width:44,height:44,borderRadius:14,backgroundColor:"#151B23",alignItems:"center",justifyContent:"center",borderWidth:1,borderColor:"#303A46"},
+  headerMenuGlyph:{fontSize:25,color:"#F4C400",fontWeight:"900"},
+  headerBrandWrap:{flex:1,alignItems:"center",justifyContent:"center"},
+  headerBrand:{fontSize:25,fontStyle:"italic",fontWeight:"900",letterSpacing:1.1,color:"#FFFFFF"},
+  headerBrandAccent:{color:"#F4C400"},
   driverHomeStatus:{fontSize:25,fontWeight:"900",color:"#F2F6FC"},
-  driverHomeHint:{fontSize:14,fontWeight:"600",color:"#222222",marginTop:2},
-  driverSettingsButton:{width:58,height:58,borderRadius:29,backgroundColor:"#0B1728",alignItems:"center",justifyContent:"center",elevation:5,shadowColor:"#000",shadowOpacity:.12,shadowRadius:8},
-  driverSettingsGlyph:{fontSize:30,color:"#F2F6FC"},
+  driverHomeHint:{fontSize:9,fontWeight:"900",color:"#E9B949",marginTop:3,letterSpacing:.5},
+  driverSettingsButton:{width:44,height:44,borderRadius:14,backgroundColor:"#151B23",alignItems:"center",justifyContent:"center",borderWidth:1,borderColor:"#303A46",elevation:5,shadowColor:"#000",shadowOpacity:.22,shadowRadius:8},
+  driverSettingsGlyph:{fontSize:22,color:"#F4C400"},
   lightMapControl:{width:50,height:50,borderRadius:25,backgroundColor:"#E9B949",alignItems:"center",justifyContent:"center",borderWidth:1,borderColor:"#E6C900",elevation:5,shadowColor:"#000",shadowOpacity:.16,shadowRadius:7},
   lightMapControlText:{fontSize:27,color:"#F2F6FC",fontWeight:"800"},
-  driverBottomSheet:{position:"absolute",left:0,right:0,bottom:78,backgroundColor:"#0B1728",borderTopLeftRadius:26,borderTopRightRadius:26,paddingHorizontal:22,paddingTop:5,paddingBottom:12,elevation:18,shadowColor:"#000",shadowOpacity:.13,shadowRadius:14,overflow:"hidden"},
+  driverBottomSheet:{position:"absolute",left:8,right:8,bottom:82,backgroundColor:"#090D14F7",borderTopLeftRadius:25,borderTopRightRadius:25,borderBottomLeftRadius:18,borderBottomRightRadius:18,borderWidth:1,borderColor:"#29333F",paddingHorizontal:16,paddingTop:5,paddingBottom:12,elevation:22,shadowColor:"#000",shadowOpacity:.38,shadowRadius:16,overflow:"hidden"},
   sheetDragArea:{height:24,alignItems:"center",justifyContent:"center"},sheetDragHandle:{width:42,height:5,borderRadius:3,backgroundColor:"#36516F"},
   driverStatsRow:{flexDirection:"row",alignItems:"center",paddingBottom:16,marginBottom:12,borderBottomWidth:1,borderBottomColor:"#29415F"},
   driverStat:{flex:1,minWidth:0,paddingHorizontal:2,alignItems:"center",justifyContent:"center"},
@@ -570,13 +576,13 @@ const styles = StyleSheet.create({
   driverInfoTitle:{fontSize:15,color:"#F2F6FC",fontWeight:"800"},
   driverInfoSubtitle:{fontSize:12,color:"#8FA3BD",marginTop:3},
   driverChevron:{fontSize:30,color:"#F2F6FC",marginLeft:10},
-  goOnlineButton:{height:86,backgroundColor:"#E9B949",borderRadius:42,marginTop:5,flexDirection:"row",alignItems:"center",padding:5},
+  goOnlineButton:{height:72,backgroundColor:"#F4C400",borderRadius:20,marginTop:5,flexDirection:"row",alignItems:"center",padding:5,borderWidth:1,borderColor:"#FFE35A"},
   goOnlineButtonActive:{backgroundColor:"#123D35"},
   goOnlineButtonCompact:{height:70,marginTop:2,padding:5},goOnlineCircleCompact:{width:58,height:58,borderRadius:29},goOnlineArrowCompact:{fontSize:30},goOnlineTextCompact:{fontSize:13},
-  goOnlineCircle:{width:74,height:74,borderRadius:37,backgroundColor:"#0B1728",alignItems:"center",justifyContent:"center"},
+  goOnlineCircle:{width:60,height:60,borderRadius:18,backgroundColor:"#101116",alignItems:"center",justifyContent:"center"},
   goOnlineArrow:{fontSize:36,color:"#F2F6FC",fontWeight:"700"},
-  goOnlineSmall:{fontSize:13,color:"#F2F6FC"},
-  goOnlineText:{fontSize:14,color:"#F2F6FC",fontWeight:"900",marginTop:1},
+  goOnlineSmall:{fontSize:11,color:"#101116",fontWeight:"800"},
+  goOnlineText:{fontSize:14,color:"#101116",fontWeight:"900",marginTop:1,letterSpacing:.35},
   
   safe:{flex:1,backgroundColor:"#0B1728"},
   fullMap:{flex:1,backgroundColor:"#0B1728"},
@@ -619,5 +625,5 @@ const styles = StyleSheet.create({
   customerCallButton:{marginTop:10,backgroundColor:"#E9B949",paddingVertical:13,paddingHorizontal:16,borderRadius:12,alignItems:"center"},customerCallButtonDisabled:{opacity:.45},customerCallButtonText:{color:"#06251B",fontSize:11,fontWeight:"900",letterSpacing:.4},
   balanceCard:{backgroundColor:"#10372E",borderRadius:16,padding:17,borderWidth:1,borderColor:"#1A654F"},balanceCaption:{color:"#A2CDBF",fontSize:9,fontWeight:"900",letterSpacing:1.2},balanceValue:{color:"#FFFFFF",fontSize:29,fontWeight:"900",marginTop:8},balanceFoot:{color:"#A2CDBF",fontSize:10,marginTop:5},
   profileCard:{alignItems:"center",backgroundColor:"#121E2F",padding:20,borderRadius:18,borderWidth:1,borderColor:"#24344A",marginBottom:7},profileMetrics:{flexDirection:"row",alignItems:"center",alignSelf:"stretch",marginTop:18,paddingTop:14,borderTopWidth:1,borderTopColor:"#2A394D"},profileMetric:{flex:1,alignItems:"center"},profileMetricValue:{color:"#E9B949",fontSize:18,fontWeight:"900"},profileMetricLabel:{color:"#8291A7",fontSize:8,fontWeight:"800",marginTop:5,textAlign:"center"},profileMetricDivider:{width:1,height:30,backgroundColor:"#2A394D"},bigAvatar:{width:66,height:66,borderRadius:23,backgroundColor:"#1A3445",borderWidth:1,borderColor:"#E9B949",alignItems:"center",justifyContent:"center"},bigAvatarText:{color:"#E9B949",fontSize:29,fontWeight:"900"},profileName:{color:"#F5F8FC",fontSize:16,fontWeight:"900",marginTop:10},profileStatus:{color:"#8392A7",fontSize:10,marginTop:4},
-  tabBar:{height:88,backgroundColor:"#101116",borderTopWidth:1,borderTopColor:"#242738",flexDirection:"row",justifyContent:"space-around",alignItems:"center",paddingBottom:6,paddingTop:4},tabItem:{flex:1,alignItems:"center",justifyContent:"center",height:"100%",gap:6,paddingTop:2},tabCenter:{transform:[{translateY:-5}]},tabCenterIcon:{width:62,height:62,borderRadius:21,backgroundColor:"#22283B",alignItems:"center",justifyContent:"center",marginBottom:-1,elevation:10},tabIcon:{fontSize:30,color:"#8A8FA3"},tabLabel:{fontSize:11,color:"#8A8FA3",fontWeight:"800"},tabActive:{color:"#E9B949"},tabIndicator:{position:"absolute",top:0,width:34,height:4,backgroundColor:"#E9B949",borderRadius:2}
+  tabBar:{height:82,backgroundColor:"#080B10",borderTopWidth:1,borderTopColor:"#30343B",flexDirection:"row",justifyContent:"space-around",alignItems:"center",paddingBottom:5,paddingTop:5,elevation:18},tabItem:{flex:1,alignItems:"center",justifyContent:"center",height:"100%",gap:4,paddingTop:3},tabCenter:{transform:[{translateY:0}]},tabCenterIcon:{width:48,height:42,borderRadius:14,backgroundColor:"#F4C400",alignItems:"center",justifyContent:"center",marginBottom:0,elevation:8},tabIcon:{fontSize:27,color:"#9298A2"},tabLabel:{fontSize:10,color:"#9298A2",fontWeight:"800"},tabActive:{color:"#F4C400"},tabIndicator:{position:"absolute",top:0,width:30,height:3,backgroundColor:"#F4C400",borderRadius:2}
 });
