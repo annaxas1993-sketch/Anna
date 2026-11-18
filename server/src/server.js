@@ -118,11 +118,17 @@ app.post("/api/orders",auth,roles("passenger"),wrap(async(req,res)=>{
 app.get("/api/orders/available",auth,roles("driver"),driverApproved,wrap(async(req,res)=>{const r=await db.query("SELECT o.*,COALESCE(o.passenger_name,u.name) AS passenger_name,COALESCE(o.passenger_phone,u.phone) AS passenger_phone FROM orders o LEFT JOIN users u ON u.id=o.passenger_id WHERE o.status='searching' AND o.dispatch_enabled=TRUE AND o.offered_driver_id=$1 AND o.offer_expires_at>NOW() ORDER BY CASE o.priority WHEN 'urgent' THEN 0 ELSE 1 END,o.created_at DESC LIMIT 10",[req.user.sub]);res.json({orders:r.rows});}));
 app.post("/api/orders/:id/accept",auth,roles("driver"),driverApproved,wrap(async(req,res)=>{const r=await db.query("UPDATE orders SET driver_id=$1,status='accepted',accepted_at=NOW(),dispatch_enabled=FALSE,dispatch_status='accepted',offered_driver_id=NULL,offer_expires_at=NULL WHERE id=$2 AND status='searching' AND dispatch_enabled=TRUE AND offered_driver_id=$1 AND offer_expires_at>NOW() AND EXISTS(SELECT 1 FROM users WHERE id=$1 AND role='driver' AND approval_status='approved' AND is_online=TRUE) RETURNING *",[req.user.sub,req.params.id]);if(!r.rowCount)return res.status(409).json({error:"Պատվերն արդեն վերցված է կամ հասանելի չէ"});io.emit("order:updated",r.rows[0]);res.json({order:r.rows[0]});}));
 app.post("/api/orders/:id/status",auth,roles("driver"),driverApproved,wrap(async(req,res)=>{
- const status=z.enum(["arrived","started","completed","cancelled"]).parse(req.body.status);
- const client=await db.pool.connect();let order,driver;
+ const b=z.object({status:z.enum(["arrived","started","completed","cancelled"]),lat:z.number().min(-90).max(90).optional(),lng:z.number().min(-180).max(180).optional()}).parse(req.body);
+ const status=b.status,client=await db.pool.connect();let order,driver;
  try{
   await client.query("BEGIN");
-  const r=await client.query("UPDATE orders SET status=$1,started_at=CASE WHEN $1='started' THEN NOW() ELSE started_at END,completed_at=CASE WHEN $1='completed' THEN NOW() ELSE completed_at END WHERE id=$2 AND driver_id=$3 AND status IN ('accepted','arrived','started') RETURNING *",[status,req.params.id,req.user.sub]);
+  let r;
+  if(status==="started"){
+   if(b.lat===undefined||b.lng===undefined){await client.query("ROLLBACK");return res.status(400).json({error:"Մեկնարկից առաջ անհրաժեշտ է GPS դիրքը"});}
+   r=await client.query("UPDATE orders SET status='started',started_at=NOW(),trip_distance_m=0,meter_fare=400,meter_last_lat=$4,meter_last_lng=$5,meter_last_at=NOW() WHERE id=$2 AND driver_id=$3 AND status IN ('accepted','arrived') RETURNING *",[status,req.params.id,req.user.sub,b.lat,b.lng]);
+  }else{
+   r=await client.query("UPDATE orders SET status=$1,completed_at=CASE WHEN $1='completed' THEN NOW() ELSE completed_at END WHERE id=$2 AND driver_id=$3 AND status IN ('accepted','arrived','started') RETURNING *",[status,req.params.id,req.user.sub]);
+  }
   if(!r.rowCount){await client.query("ROLLBACK");return res.status(409).json({error:"Հնարավոր չէ փոխել պատվերի վիճակը"});}
   order=r.rows[0];
   if(status==="completed"){
@@ -132,6 +138,30 @@ app.post("/api/orders/:id/status",auth,roles("driver"),driverApproved,wrap(async
   await client.query("COMMIT");
  }catch(error){await client.query("ROLLBACK");throw error;}finally{client.release();}
  io.emit("order:updated",order);res.json({order,driver});
+}));
+app.post("/api/orders/:id/meter/update",auth,roles("driver"),driverApproved,wrap(async(req,res)=>{
+ const b=z.object({lat:z.number().min(-90).max(90),lng:z.number().min(-180).max(180),accuracy:z.number().min(0).max(1000).optional()}).parse(req.body);
+ if(b.accuracy!==undefined&&b.accuracy>50)return res.status(422).json({error:"GPS ճշգրտությունը բավարար չէ տաքսիմետրի համար"});
+ const client=await db.pool.connect();let order;
+ try{
+  await client.query("BEGIN");
+  const found=await client.query("SELECT * FROM orders WHERE id=$1 AND driver_id=$2 AND status='started' FOR UPDATE",[req.params.id,req.user.sub]);
+  if(!found.rowCount){await client.query("ROLLBACK");return res.status(409).json({error:"Ակտիվ ուղևորություն չի գտնվել"});}
+  const o=found.rows[0];let add=0;
+  if(o.meter_last_lat!==null&&o.meter_last_lng!==null&&o.meter_last_at){
+   const rad=x=>x*Math.PI/180,lat1=rad(Number(o.meter_last_lat)),lat2=rad(b.lat),dLat=lat2-lat1,dLng=rad(b.lng-Number(o.meter_last_lng));
+   const h=Math.sin(dLat/2)**2+Math.cos(lat1)*Math.cos(lat2)*Math.sin(dLng/2)**2;
+   add=6371000*2*Math.atan2(Math.sqrt(h),Math.sqrt(1-h));
+   const seconds=Math.max(1,(Date.now()-new Date(o.meter_last_at).getTime())/1000);
+   if(add>Math.max(120,seconds*55))add=0;
+  }
+  const distance=Number(o.trip_distance_m||0)+add;
+  const extraKm=Math.max(0,Math.ceil((distance-2000)/1000));
+  const fare=400+extraKm*100;
+  const updated=await client.query("UPDATE orders SET trip_distance_m=$1,meter_fare=$2,meter_last_lat=$3,meter_last_lng=$4,meter_last_at=NOW() WHERE id=$5 RETURNING id,status,trip_distance_m,meter_fare",[distance,fare,b.lat,b.lng,req.params.id]);
+  order=updated.rows[0];await client.query("COMMIT");
+ }catch(error){await client.query("ROLLBACK");throw error;}finally{client.release();}
+ res.json({meter:order,distance_km:Number(order.trip_distance_m)/1000,fare:Number(order.meter_fare)});
 }));
 app.post("/api/orders/:id/reject",auth,roles("driver"),driverApproved,wrap(async(req,res)=>{
  const client=await db.pool.connect();let order,driver;
