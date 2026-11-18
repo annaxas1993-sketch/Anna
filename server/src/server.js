@@ -217,7 +217,7 @@ app.post("/api/admin/orders/:id/dispatch",auth,roles("admin"),wrap(async(req,res
 }));
 app.patch("/api/admin/orders/:id/assign",auth,roles("admin"),wrap(async(req,res)=>{
  const b=z.object({driver_id:z.string().uuid()}).parse(req.body);
- const r=await db.query("UPDATE orders SET driver_id=$1,status='accepted',accepted_at=NOW() WHERE id=$2 AND status='searching' AND EXISTS(SELECT 1 FROM users WHERE id=$1 AND role='driver' AND approval_status='approved' AND is_online=TRUE) RETURNING *",[b.driver_id,req.params.id]);
+ const r=await db.query("UPDATE orders SET driver_id=$1,status='accepted',accepted_at=NOW(),dispatch_enabled=FALSE,dispatch_status='assigned',offered_driver_id=NULL,offer_expires_at=NULL WHERE id=$2 AND status='searching' AND EXISTS(SELECT 1 FROM users WHERE id=$1 AND role='driver' AND approval_status='approved' AND is_online=TRUE) RETURNING *",[b.driver_id,req.params.id]);
  if(!r.rowCount)return res.status(409).json({error:"Պատվերը հասանելի չէ կամ վարորդը չի գտնվել"});
  io.emit("order:updated",r.rows[0]);io.to("user:"+b.driver_id).emit("order:assigned",r.rows[0]);res.json({order:r.rows[0]});
 }));
