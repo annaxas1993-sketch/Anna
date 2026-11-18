@@ -6,7 +6,7 @@ import * as Location from "expo-location";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import Constants from "expo-constants";
 
-const API_BASE = "https://accepted-governmental-ppm-pre.trycloudflare.com";
+const API_BASE = "https://carol-debrief-cuddle.ngrok-free.dev";
 const SCREEN_HEIGHT = Dimensions.get("window").height;
 const DEFAULT_LOCATION = { latitude: 40.8128, longitude: 44.4883 };
 const TAXIMETER_BASE_FARE=400,TAXIMETER_INCLUDED_KM=2,TAXIMETER_EXTRA_KM_RATE=100;
