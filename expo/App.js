@@ -198,19 +198,30 @@ setTimeout(()=>{map.invalidateSize(true);map.setView(marker.getLatLng(),16,{anim
       if (!active || alerted || Date.now() - lastCheck < 60000) return;
       lastCheck = Date.now();
       try {
-        const response = await fetch("https://api.github.com/repos/annaxas1993-sketch/Anna/releases/latest", {
-          headers: { Accept: "application/vnd.github+json" }
+        // The dispatcher also publishes releases, so never use /releases/latest here.
+        // Find the newest driver-only release by its taxi-lider-build-N tag.
+        const response = await fetch("https://api.github.com/repos/annaxas1993-sketch/Anna/releases?per_page=100", {
+          headers: { Accept: "application/vnd.github+json", "Cache-Control": "no-cache" }
         });
         if (!response.ok) return;
-        const release = await response.json();
-        const match = String(release.tag_name || "").match(/^taxi-lider-build-(\d+)$/);
-        const latestBuild = match ? Number(match[1]) : 0;
-        const apk = (release.assets || []).find(asset => asset.name === "app-release.apk");
-        if (!active || !apk || latestBuild <= installedBuild) return;
+        const releases = await response.json();
+        const driverReleases = (Array.isArray(releases) ? releases : [])
+          .map(release => {
+            const match = String(release.tag_name || "").match(/^taxi-lider-build-(\\d+)$/);
+            return match ? { release, build: Number(match[1]) } : null;
+          })
+          .filter(item => item && !item.release.draft && !item.release.prerelease)
+          .sort((a, b) => b.build - a.build);
+        const newest = driverReleases[0];
+        if (!newest || !active || newest.build <= installedBuild) return;
+        const apk = (newest.release.assets || []).find(asset =>
+          asset.name === "app-release.apk" && asset.state === "uploaded"
+        );
+        if (!apk || !active) return;
         alerted = true;
         Alert.alert(
           "TAXI LIDER-ի նոր տարբերակ կա",
-          "Հասանելի է նոր տարբերակ։ APK-ն կներբեռնվի, հետո բացիր ներբեռնված ֆայլը և հաստատիր տեղադրումը։",
+          "Հասանելի է TAXI LIDER-ի նոր տարբերակը։ Սեղմիր «Ներբեռնել», հետո բացիր APK-ն և հաստատիր թարմացումը․ հին հավելվածն ու տվյալները կմնան։",
           [
             { text: "Ավելի ուշ", style: "cancel", onPress: () => { alerted = false; } },
             { text: "Ներբեռնել", onPress: () => Linking.openURL(apk.browser_download_url).catch(() => Alert.alert("Սխալ", "Չհաջողվեց բացել APK-ի ներբեռնումը։")) }
