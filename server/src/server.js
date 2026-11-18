@@ -178,7 +178,7 @@ app.post("/api/orders/:id/reject",auth,roles("driver"),driverApproved,wrap(async
  res.json({order,driver});
  dispatchNext(order.id).catch(error=>console.error("Dispatch after driver rejection failed",error));
 }));
-app.get("/api/orders/mine",auth,wrap(async(req,res)=>{const col=req.user.role==="driver"?"driver_id":"passenger_id";const r=await db.query(`SELECT o.*,u.name AS passenger_name,u.phone AS passenger_phone FROM orders o JOIN users u ON u.id=o.passenger_id WHERE o.${col}=$1 ORDER BY o.created_at DESC LIMIT 100`,[req.user.sub]);res.json({orders:r.rows});}));
+app.get("/api/orders/mine",auth,wrap(async(req,res)=>{const col=req.user.role==="driver"?"driver_id":"passenger_id";const r=await db.query(`SELECT o.*,COALESCE(o.passenger_name,u.name) AS passenger_name,COALESCE(o.passenger_phone,u.phone) AS passenger_phone FROM orders o LEFT JOIN users u ON u.id=o.passenger_id WHERE o.${col}=$1 ORDER BY o.created_at DESC LIMIT 100`,[req.user.sub]);res.json({orders:r.rows});}));
 app.post("/api/admin/orders",auth,roles("admin"),wrap(async(req,res)=>{
  const b=z.object({passenger_name:z.string().min(2).max(80),passenger_phone:phone,pickup_address:z.string().min(3).max(240),destination_address:z.string().min(3).max(240),pickup:coords,destination:coords,note:z.string().max(500).optional(),priority:z.enum(["normal","urgent"]).default("normal")}).parse(req.body);
  const r=await db.query("INSERT INTO orders(passenger_name,passenger_phone,pickup_address,destination_address,pickup_lat,pickup_lng,dest_lat,dest_lng,note,status,priority) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,'searching',$10) RETURNING *",[b.passenger_name,b.passenger_phone,b.pickup_address,b.destination_address,b.pickup.lat,b.pickup.lng,b.destination.lat,b.destination.lng,b.note||null,b.priority]);
