@@ -207,7 +207,7 @@ setTimeout(()=>{map.invalidateSize(true);map.setView(marker.getLatLng(),16,{anim
         const releases = await response.json();
         const driverReleases = (Array.isArray(releases) ? releases : [])
           .map(release => {
-            const match = String(release.tag_name || "").match(/^taxi-lider-build-(\\d+)$/);
+            const match = String(release.tag_name || "").match(/^taxi-lider-build-(\d+)$/);
             return match ? { release, build: Number(match[1]) } : null;
           })
           .filter(item => item && !item.release.draft && !item.release.prerelease)
