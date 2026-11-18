@@ -39,6 +39,7 @@ ALTER TABLE orders ADD COLUMN IF NOT EXISTS trip_distance_m DOUBLE PRECISION NOT
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS meter_fare NUMERIC(12,2) NOT NULL DEFAULT 400;
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS meter_last_lat DOUBLE PRECISION;
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS meter_last_lng DOUBLE PRECISION;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS meter_last_at TIMESTAMPTZ;
 CREATE INDEX IF NOT EXISTS orders_status_created_idx ON orders(status,created_at DESC);
 CREATE INDEX IF NOT EXISTS orders_driver_created_idx ON orders(driver_id,created_at DESC);
 
