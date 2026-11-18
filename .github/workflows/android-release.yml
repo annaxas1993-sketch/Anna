@@ -33,8 +33,29 @@ jobs:
         run: |
           yes | sdkmanager --licenses >/dev/null
           sdkmanager --install "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+      - name: Validate server and driver JavaScript
+        run: |
+          node --check server/src/server.js
+          python3 - <<'PY'
+          import re
+          from pathlib import Path
+          html = Path("app/src/main/assets/index.html").read_text(encoding="utf-8")
+          scripts = re.findall(r'<script(?![^>]*\\bsrc=)[^>]*>(.*?)</script>', html, re.S | re.I)
+          if not scripts:
+              raise SystemExit("No inline driver script found")
+          Path("/tmp/taxi-lider-driver.js").write_text("\\n".join(scripts), encoding="utf-8")
+          PY
+          node --check /tmp/taxi-lider-driver.js
+          python3 -m json.tool server/package.json >/dev/null
       - name: Build installable APK
         run: gradle --no-daemon :app:assembleDebug
+      - name: Verify APK contents
+        run: |
+          APK=app/build/outputs/apk/debug/app-debug.apk
+          test -s "$APK"
+          unzip -l "$APK" | grep -q 'assets/index.html'
+          unzip -l "$APK" | grep -q 'classes.dex'
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | grep -E "package: name='am.axas.driver'|sdkVersion:'23'"
       - name: Rename APK
         run: cp app/build/outputs/apk/debug/app-debug.apk TAXI-LIDER-Driver-${{ github.run_number }}.apk
       - name: Upload build artifact
