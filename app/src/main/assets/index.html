@@ -24,7 +24,7 @@
 const $=id=>document.getElementById(id);let API=localStorage.getItem('lider_server')||'http://127.0.0.1:3000',token=localStorage.getItem('lider_token')||'',user=null,online=false,watchId=null,marker=null,routeLayer=null,destMarker=null,socket=null,lastPosition=null,searchTimer=null,heading=0,lastAccuracy=999,routeTarget=null,lastRouteAt=0,lastRoutePosition=null,routeLoading=false,activeOrderId=null,activeOrderStatus='',meterRunning=false,meterUpdating=false,currentFare=400,currentDistance=0;
 $('serverUrl').value=API;
 const map=L.map('map',{zoomControl:false}).setView([40.8128,44.4883],14);
-L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{maxZoom:20,attribution:'© OpenStreetMap © CARTO'}).addTo(map);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,subdomains:['a','b','c'],attribution:'© OpenStreetMap contributors'}).addTo(map);
 function page(id,btn){document.querySelectorAll('.page').forEach(x=>x.classList.remove('active'));$(id).classList.add('active');document.querySelectorAll('nav button').forEach(x=>x.classList.remove('active'));btn.classList.add('active');setTimeout(()=>map.invalidateSize(),120)}
 function saveServer(){API=$('serverUrl').value.trim().replace(/\/$/,'');localStorage.setItem('lider_server',API);status('Սերվերի հասցեն պահպանված է');if(token)loadMe()}
 function status(t){$('connection').textContent=t}
