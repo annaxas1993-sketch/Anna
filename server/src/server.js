@@ -125,7 +125,7 @@ app.post("/api/orders/:id/status",auth,roles("driver"),driverApproved,wrap(async
   let r;
   if(status==="started"){
    if(b.lat===undefined||b.lng===undefined){await client.query("ROLLBACK");return res.status(400).json({error:"Մեկնարկից առաջ անհրաժեշտ է GPS դիրքը"});}
-   r=await client.query("UPDATE orders SET status='started',started_at=NOW(),trip_distance_m=0,meter_fare=400,meter_last_lat=$4,meter_last_lng=$5,meter_last_at=NOW() WHERE id=$1 AND driver_id=$2 AND status IN ('accepted','arrived') RETURNING *",[req.params.id,req.user.sub,b.lat,b.lng]);
+   r=await client.query("UPDATE orders SET status='started',started_at=NOW(),trip_distance_m=0,meter_fare=400,meter_last_lat=$3,meter_last_lng=$4,meter_last_at=NOW() WHERE id=$1 AND driver_id=$2 AND status IN ('accepted','arrived') RETURNING *",[req.params.id,req.user.sub,b.lat,b.lng]);
   }else{
    r=await client.query("UPDATE orders SET status=$1,completed_at=CASE WHEN $1='completed' THEN NOW() ELSE completed_at END WHERE id=$2 AND driver_id=$3 AND status IN ('accepted','arrived','started') RETURNING *",[status,req.params.id,req.user.sub]);
   }
