@@ -15,7 +15,7 @@
       "label": "TAXI LIDER",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-foreground.png",
-        "backgroundColor": "#081321"
+        "backgroundColor": "#000000"
       },
       "versionCode": 6
     },
