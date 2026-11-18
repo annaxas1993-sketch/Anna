@@ -1,36 +1,28 @@
-# TAXI LIDER API + Dispatcher
+# TAXI LIDER — տեղական սերվեր և դիսպետչեր
 
-Node.js + Express + PostgreSQL + Socket.IO backend. The browser dispatcher dashboard is served from the same service root: `/`.
+Այս նախագիծը նախատեսված է անձնական Android հեռախոսում աշխատող Termux սերվերի համար։ Այն չի պահանջում Render։
 
-## Temporary deployment (Render)
+## Termux սերվերի գործարկում
 
-1. Open the Render Blueprint deploy link: https://render.com/deploy?repo=https://github.com/annaxas1993-sketch/Anna
-2. Sign in to Render and create the Blueprint instance from the repository's `render.yaml`.
-3. Wait until the `taxi-lider-api` web service is Live. Its `https://....onrender.com/` URL is both the dispatcher address and API base.
-4. In the Render service Environment page, copy the generated `ADMIN_SETUP_KEY`.
-5. Open the service URL, expand **Առաջին դիսպետչերի հաշիվ ստեղծել**, enter the name, phone, password (8+ characters), and setup key. Create the first admin, then sign in.
+1. Տեղադրիր Termux-ում Node.js LTS, PostgreSQL և OpenSSL։
+2. Պահիր այս `server` պանակը հեռախոսում։
+3. Մի անգամ գործարկիր `bash termux-start.sh`։ Սկրիպտը ստեղծում է PostgreSQL տվյալների բազան, գաղտնի `.env` կարգավորումները և տեղադրում npm փաթեթները։
+4. Հաջորդ գործարկումների համար նույն հրամանը մեկնարկում է սերվերը։
+5. Ստուգիր՝ `http://127.0.0.1:3000/health`։ Պատասխանը պետք է պարունակի `ok:true`։
 
-The setup key is private. Do not share it in chat. The first-admin setup endpoint is disabled after an admin account exists.
+Վարորդի հավելվածը նույն հեռախոսի վրա լռելյայն միանում է `http://127.0.0.1:3000` հասցեին։ Դիսպետչերի հեռախոսը պետք է միանա նույն սերվերին հասանելի LAN կամ անվտանգ HTTPS թունելի հասցեով․ `127.0.0.1`-ը այլ հեռախոսի վրա չի մատնանշում սերվերի հեռախոսը։
 
-## Local configuration
+Առաջին ադմինի հաշիվը ստեղծվում է `POST /api/setup/admin` հասցեով՝ `x-setup-key` վերնագրում `.env` ֆայլի `ADMIN_SETUP_KEY` արժեքը փոխանցելով։ Այդ բանալին գաղտնի պահիր։
 
-Set `DATABASE_URL`, `JWT_SECRET`, `ADMIN_SETUP_KEY`, and `CORS_ORIGIN`. Start with `npm start` (Node 20+). Health check: `GET /health`.
+## API-ի հիմնական ուղիներ
 
-## API
-
-- `POST /api/setup/admin` — create the first admin only; requires `x-setup-key`
-- `POST /api/auth/register` and `POST /api/auth/login`
+- `POST /api/auth/register` և `POST /api/auth/login`
 - `GET /api/me`
-- `PATCH /api/drivers/availability`
-- `POST /api/drivers/location`
-- `POST /api/orders`
-- `GET /api/admin/drivers` and `GET /api/admin/orders`
-- `PATCH /api/admin/orders/:id/assign`
-- `PATCH /api/admin/orders/:id/status`
-- `GET /api/orders/available`, `POST /api/orders/:id/accept`, `POST /api/orders/:id/status`, `GET /api/orders/mine`
+- `PATCH /api/drivers/availability` և `POST /api/drivers/location`
+- `GET /api/orders/available`, `GET /api/orders/mine`
+- `POST /api/orders/:id/accept`, `POST /api/orders/:id/status`
+- `POST /api/orders/:id/meter/update`
+- `GET /api/admin/drivers`, `GET /api/admin/orders`
+- `PATCH /api/admin/orders/:id/assign` և `POST /api/admin/orders/:id/dispatch`
 
-## Important
-
-The dispatcher dashboard and backend source are prepared, but this repository alone does not mean the service is already deployed. Render creates the public URL only after the owner creates the Blueprint instance. Render's free PostgreSQL database is temporary and may expire; use a persistent paid database for production.
-
-The current driver app still needs its driver sign-in, server URL configuration, and authenticated GPS/order integration before live driver positions and orders can appear in this dispatcher.
+Սերվերի կոդը ավտոմատ կերպով կիրառում է `server/db/schema.sql` սխեման մեկնարկի ժամանակ։ Տվյալների բազայի պահուստային պատճեններ պարբերաբար պահիր։
