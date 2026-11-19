@@ -8,6 +8,7 @@
 <header><div class="brand">LD <span>TAXI LIDER</span></div><div class="muted" id="connection" style="color:#272727">Սերվերը կարգավորված չէ</div></header>
 <main>
 <section id="home" class="page active">
+ <div class="card" id="updateCard"><div class="row"><div><b>Հավելվածի թարմացում</b><div class="muted" id="updateStatus">Ստուգվում է նոր տարբերակը…</div></div><button id="updateBtn" onclick="checkAppUpdate(true)">ՍՏՈՒԳԵԼ</button></div></div>
  <div class="card"><div class="row"><div><div class="muted">Վարորդի հաշիվ</div><b id="driverName">Մուտք գործեք համակարգ</b></div><div style="text-align:right"><div class="muted">Բալանս</div><div class="big" id="balance">— ֏</div></div></div></div>
  <div class="card"><div class="row"><div><b>Աշխատանքային վիճակ</b><div class="muted" id="onlineLabel">Անցանց</div></div><button id="onlineBtn" onclick="setOnline()">ԳՈՐԾԻ ՄԵՋ</button></div></div>
  <div class="row" style="margin:10px 2px"><b>Քարտեզ և նավիգացիա</b><span class="muted" id="gps">GPS՝ անջատված</span></div>
@@ -28,6 +29,22 @@ const ARMENIA_BOUNDS=[[38.8,43.4],[41.3,46.7]];map.setMaxBounds(ARMENIA_BOUNDS);
 function page(id,btn){document.querySelectorAll('.page').forEach(x=>x.classList.remove('active'));$(id).classList.add('active');document.querySelectorAll('nav button').forEach(x=>x.classList.remove('active'));btn.classList.add('active');setTimeout(()=>map.invalidateSize(),120)}
 function saveServer(){API=$('serverUrl').value.trim().replace(/\/$/,'');localStorage.setItem('lider_server',API);status('Սերվերի հասցեն պահպանված է');if(token)loadMe()}
 function status(t){$('connection').textContent=t}
+const APP_VERSION='1.3.7';
+async function checkAppUpdate(userAction=false){
+ const label=$('updateStatus'),btn=$('updateBtn'); if(!label||!btn)return;
+ label.textContent='Ստուգվում է…';btn.disabled=true;
+ try{
+  const res=await fetch('https://api.github.com/repos/annaxas1993-sketch/Anna/releases/latest',{cache:'no-store'});
+  if(!res.ok)throw Error('Release ստուգման սխալ');
+  const release=await res.json();const asset=(release.assets||[]).find(a=>a.name.toLowerCase().endsWith('.apk'));
+  if(!asset)throw Error('Թարմացման APK չի գտնվել');
+  const tag=(release.tag_name||'').replace(/^taxi-lider-build-/,'');
+  label.textContent='Հասանելի է նոր տարբերակ · '+(release.name||tag);
+  btn.textContent='ԹԱՐՄԱՑՆԵԼ';btn.onclick=()=>{if(window.AndroidUpdater&&AndroidUpdater.downloadAndInstall)AndroidUpdater.downloadAndInstall(asset.browser_download_url);else window.open(asset.browser_download_url,'_blank')};
+  if(userAction)alert('Նոր տարբերակ կա։ Սեղմեք ԹԱՐՄԱՑՆԵԼ՝ ներբեռնելու համար։');
+ }catch(e){label.textContent='Չհաջողվեց ստուգել թարմացումը';btn.textContent='ԿՐԿԻՆ';btn.onclick=()=>checkAppUpdate(true);if(userAction)alert(e.message)}
+ finally{btn.disabled=false}
+}
 async function api(path,method='GET',body){if(!API)throw Error('Նախ պրոֆիլում նշեք սերվերի հասցեն');const r=await fetch(API+path,{method,headers:{'Content-Type':'application/json',...(token?{Authorization:'Bearer '+token}:{})},...(body?{body:JSON.stringify(body)}:{})});let j={};try{j=await r.json()}catch{}if(!r.ok)throw Error(j.error||'Սերվերի սխալ '+r.status);return j}
 async function login(){try{const j=await api('/api/auth/login','POST',{phone:$('phone').value.trim(),password:$('password').value});token=j.token;localStorage.setItem('lider_token',token);user=j.user;afterLogin()}catch(e){alert(e.message)}}
 async function registerDriver(){try{const b={name:$('name').value.trim(),phone:$('phone').value.trim(),password:$('password').value,role:'driver',car_model:$('car').value.trim(),plate_number:$('plate').value.trim(),driver_license_number:$('license').value.trim()};const j=await api('/api/auth/register','POST',b);token=j.token;localStorage.setItem('lider_token',token);user=j.user;afterLogin();alert(j.message||'Գրանցումը կատարված է')}catch(e){alert(e.message)}}
@@ -55,5 +72,5 @@ async function startTrip(){if(!activeOrderId)return;if(!lastPosition){locate();r
 async function cancelTrip(){if(!activeOrderId||!confirm('Դուրս գա՞լ ընթացիկ ուղևորությունից։ Դուք կմնաք առցանց և կկարողանաք ստանալ նոր պատվեր։'))return;try{await api('/api/orders/'+encodeURIComponent(activeOrderId)+'/status','POST',{status:'cancelled'});meterRunning=false;activeOrderId=null;activeOrderStatus='';$('activeOrder').classList.add('hidden');await loadOrders();status('Ուղևորությունից դուրս եկաք․ առցանց եք և պատրաստ եք նոր պատվերի')}catch(e){alert(e.message)}}
 async function completeTrip(){if(!activeOrderId)return;if(!confirm('Ավարտե՞լ ուղևորությունը և պահպանել տաքսիմետրի գումարը'))return;try{if(lastPosition&&lastAccuracy<=50){const m=await api('/api/orders/'+encodeURIComponent(activeOrderId)+'/meter/update','POST',{lat:lastPosition[0],lng:lastPosition[1],accuracy:lastAccuracy});currentFare=Number(m.fare||currentFare);currentDistance=Number(m.meter?.trip_distance_m||currentDistance)}const j=await api('/api/orders/'+encodeURIComponent(activeOrderId)+'/status','POST',{status:'completed'});currentFare=Number(j.order?.meter_fare||currentFare);currentDistance=Number(j.order?.trip_distance_m||currentDistance);meterRunning=false;activeOrderStatus='completed';renderActiveOrder({id:activeOrderId});activeOrderId=null;await loadBalance();await loadOrders();status('Ուղևորությունն ավարտված է · '+Math.round(currentFare)+' ֏')}catch(e){alert(e.message)}}
 async function logout(){try{if(token&&online)await api('/api/drivers/availability','PATCH',{online:false})}catch(e){status('Սերվերի հետ կապ չկա․ առցանց վիճակը չհաստատվեց')}stopGPS();if(socket)socket.disconnect();token='';user=null;online=false;activeOrderId=null;activeOrderStatus='';meterRunning=false;localStorage.removeItem('lider_token');$('activeOrder').classList.add('hidden');$('driverName').textContent='Մուտք գործեք համակարգ';$('balance').textContent='— ֏';$('onlineLabel').textContent='Անցանց';$('onlineBtn').textContent='ԳՈՐԾԻ ՄԵՋ';status('Հաշվից դուրս եկաք')}
-if(token)loadMe().then(afterLogin).catch(()=>{token='';localStorage.removeItem('lider_token')});
+checkAppUpdate(false);\nif(token)loadMe().then(afterLogin).catch(()=>{token='';localStorage.removeItem('lider_token')});
 </script></body></html>
