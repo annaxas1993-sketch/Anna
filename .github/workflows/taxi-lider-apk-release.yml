@@ -18,7 +18,7 @@ jobs:
           distribution: temurin
           java-version: '17'
       - run: npm install
-      - run: npx cap add android
+      - run: if [ ! -d android ]; then npx cap add android; fi
       - run: npx cap sync android
       - name: Build APK
         run: cd android && ./gradlew assembleDebug
