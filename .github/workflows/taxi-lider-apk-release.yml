@@ -1,0 +1,36 @@
+name: TAXI LIDER APK Release
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - run: npm install
+      - run: npx cap add android
+      - run: npx cap sync android
+      - name: Build APK
+        run: cd android && ./gradlew assembleDebug
+      - name: Publish APK
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: taxi-lider-${{ github.run_number }}
+          name: TAXI LIDER APK ${{ github.run_number }}
+          body: Automatically built APK from the ZIP project.
+          files: android/app/build/outputs/apk/debug/app-debug.apk
+          make_latest: true
+      - uses: actions/upload-artifact@v4
+        with:
+          name: TAXI-LIDER-APK
+          path: android/app/build/outputs/apk/debug/app-debug.apk
